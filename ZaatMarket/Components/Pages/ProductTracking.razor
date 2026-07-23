@@ -1,0 +1,280 @@
+﻿@page "/product-tracking"
+@page "/product-tracking/{ProductId:int}"
+@rendermode InteractiveServer
+@implements IDisposable
+@using ZaatMarket.Models
+@using ZaatMarket.Data
+@using Microsoft.EntityFrameworkCore
+@inject ApplicationDbContext Db
+@inject IJSRuntime JS
+
+<PageTitle>Live Delivery Tracker | Z-A-A-T-T</PageTitle>
+
+<div class="tracking-layout">
+    
+    <aside class="order-sidebar">
+        
+        @if (ProductId.HasValue)
+        {
+            <div class="sidebar-head">
+                <h2>Order Tracking</h2>
+                <span class="order-id">#ZAAT-ORD-@ProductId</span>
+            </div>
+
+            <div class="product-info">
+                <div class="product-icon">📦</div>
+                <div>
+                    @if (isLoading)
+                    {
+                        <h4>Loading product...</h4>
+                    }
+                    else if (trackedProduct != null)
+                    {
+                        <h4>@trackedProduct.Title</h4>
+                        <p>@trackedProduct.Category • @trackedProduct.Price.ToString("C2")</p>
+                    }
+                    else
+                    {
+                        <h4>Product Not Found</h4>
+                        <p>This item may have been removed.</p>
+                    }
+                </div>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-step completed">
+                    <div class="step-icon">✓</div>
+                    <div class="step-text">
+                        <h4>Listing Confirmed</h4>
+                        <p>Database Verified</p>
+                    </div>
+                </div>
+                <div class="timeline-step active">
+                    <div class="step-icon pulse-small">📍</div>
+                    <div class="step-text">
+                        <h4>Location Tracking</h4>
+                        <p>Broadcasting live coordinates</p>
+                    </div>
+                </div>
+                <div class="timeline-step pending">
+                    <div class="step-icon">🏁</div>
+                    <div class="step-text">
+                        <h4>Destination</h4>
+                        <p>Pending Arrival</p>
+                    </div>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="sidebar-head">
+                <h2>Live Map Monitor</h2>
+                <span class="order-id">System Tracker</span>
+            </div>
+
+            <div class="product-info">
+                <div class="product-icon">🛰️</div>
+                <div>
+                    <h4>GPS Telemetry</h4>
+                    <p>Device Channel Active</p>
+                </div>
+            </div>
+
+            <div class="timeline">
+                <div class="timeline-step completed">
+                    <div class="step-icon">✓</div>
+                    <div class="step-text">
+                        <h4>System Ready</h4>
+                        <p>Map Engine Initialized</p>
+                    </div>
+                </div>
+                <div class="timeline-step active">
+                    <div class="step-icon pulse-small">📍</div>
+                    <div class="step-text">
+                        <h4>Signal Locked</h4>
+                        <p>Tracking local hardware</p>
+                    </div>
+                </div>
+            </div>
+        }
+
+    </aside>
+
+    <main class="map-section">
+        
+        <div class="telemetry-bar">
+            <div class="status-indicator">
+                <span class="pulse-dot"></span>
+                <div>
+                    <h3>Live GPS: Active</h3>
+                    <p class="muted">Updating automatically...</p>
+                </div>
+            </div>
+
+            <div class="metrics-grid">
+                <div class="metric-card">
+                    <span class="label">Latitude</span>
+                    <span class="value">@currentLatitude.ToString("F5")°</span>
+                </div>
+                <div class="metric-card">
+                    <span class="label">Longitude</span>
+                    <span class="value">@currentLongitude.ToString("F5")°</span>
+                </div>
+                <div class="metric-card">
+                    <span class="label">Last Sync</span>
+                    <span class="value">@lastUpdateTime.ToLocalTime().ToString("HH:mm:ss")</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="map-wrapper">
+            <div id="liveTrackingMap" class="tracking-map-frame"></div>
+            
+            <button class="track-btn" @onclick="SnapToCourier">
+                🎯 Locate Me
+            </button>
+        </div>
+
+    </main>
+</div>
+
+<style>
+    /* Layout */
+    .tracking-layout { display: flex; height: calc(100vh - 70px); background: #f8fafc; font-family: system-ui, sans-serif; }
+    
+    /* Sidebar */
+    .order-sidebar { width: 360px; background: #ffffff; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; z-index: 10; box-shadow: 4px 0 24px rgba(0,0,0,0.02); }
+    .sidebar-head { padding: 24px; border-bottom: 1px solid #f1f5f9; }
+    .sidebar-head h2 { margin: 0 0 4px 0; font-size: 1.4rem; color: #0f172a; }
+    .order-id { font-size: 0.9rem; color: #64748b; font-weight: 600; font-family: monospace; }
+    
+    .product-info { padding: 20px 24px; display: flex; gap: 16px; align-items: center; border-bottom: 1px solid #f1f5f9; background: #f8fafc; }
+    .product-icon { font-size: 2rem; background: white; padding: 10px; border-radius: 12px; border: 1px solid #e2e8f0; }
+    .product-info h4 { margin: 0 0 4px 0; color: #0f172a; }
+    .product-info p { margin: 0; font-size: 0.85rem; color: #64748b; }
+
+ 
+    .timeline { padding: 24px; display: flex; flex-direction: column; gap: 20px; }
+    .timeline-step { display: flex; gap: 16px; }
+    .step-icon { width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.9rem; font-weight: bold; z-index: 2; position: relative; }
+    .timeline-step.completed .step-icon { background: #22c55e; color: white; }
+    .timeline-step.active .step-icon { background: #3b82f6; color: white; border: 2px solid #bfdbfe; }
+    .timeline-step.pending .step-icon { background: #f1f5f9; color: #94a3b8; border: 2px solid #e2e8f0; }
+    
+    .step-text h4 { margin: 0 0 4px 0; font-size: 0.95rem; color: #0f172a; }
+    .step-text p { margin: 0; font-size: 0.8rem; color: #64748b; }
+    
+    .timeline-step.active .step-text h4 { color: #3b82f6; }
+    .timeline-step.pending .step-text h4 { color: #94a3b8; }
+
+    /* Main Map Section */
+    .map-section { flex-grow: 1; display: flex; flex-direction: column; position: relative; }
+    .telemetry-bar { background: #ffffff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #e2e8f0; z-index: 10; box-shadow: 0 4px 12px rgba(0,0,0,0.03); }
+    .status-indicator { display: flex; align-items: center; gap: 14px; }
+    .status-indicator h3 { margin: 0 0 2px 0; font-size: 1.1rem; color: #0f172a; }
+    .status-indicator p { margin: 0; font-size: 0.85rem; color: #64748b; }
+    
+    .pulse-dot { width: 12px; height: 12px; background-color: #22c55e; border-radius: 50%; box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); animation: pulse 1.6s infinite; }
+    
+    /* Escaped keyframes for Blazor compiler */
+    @@keyframes pulse { 0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); } 70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(34, 197, 94, 0); } 100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+
+    .metrics-grid { display: flex; gap: 24px; }
+    .metric-card { display: flex; flex-direction: column; }
+    .metric-card .label { font-size: 0.75rem; text-transform: uppercase; color: #64748b; font-weight: 600; }
+    .metric-card .value { font-size: 1.1rem; font-weight: 700; color: #0f172a; font-family: monospace; }
+
+    /* Map Elements */
+    .map-wrapper { flex-grow: 1; position: relative; }
+    .tracking-map-frame { width: 100%; height: 100%; position: absolute; }
+    
+    .track-btn {
+        position: absolute;
+        bottom: 30px;
+        right: 30px;
+        z-index: 1000;
+        background: #ffffff;
+        color: #0f172a;
+        border: 2px solid #e2e8f0;
+        padding: 14px 24px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+        transition: all 0.2s ease;
+    }
+    .track-btn:hover { background: #f8fafc; transform: translateY(-2px); box-shadow: 0 14px 30px rgba(0,0,0,0.2); }
+    .track-btn:active { transform: translateY(1px); }
+
+    ::deep .custom-live-icon { position: relative; }
+    ::deep .live-core { width: 14px; height: 14px; background: #3b82f6; border: 2px solid white; border-radius: 50%; position: absolute; top: 5px; left: 5px; z-index: 2; box-shadow: 0 2px 4px rgba(0,0,0,0.3); }
+    ::deep .live-ring { width: 24px; height: 24px; background: rgba(59, 130, 246, 0.4); border-radius: 50%; position: absolute; top: 0; left: 0; animation: markerPulse 2s infinite ease-out; }
+    
+    
+    @@keyframes markerPulse { 0% { transform: scale(0.8); opacity: 1; } 100% { transform: scale(2.5); opacity: 0; } }
+    
+    @@media (max-width: 900px) {
+        .tracking-layout { flex-direction: column; height: auto; }
+        .order-sidebar { width: 100%; border-right: none; border-bottom: 1px solid #e2e8f0; }
+        .map-section { height: 60vh; }
+        .metrics-grid { display: none; }
+    }
+</style>
+
+@code {
+
+    [Parameter]
+    public int? ProductId { get; set; }
+
+    private Product? trackedProduct;
+    private bool isLoading = true;
+
+    private double currentLatitude = 0.0;
+    private double currentLongitude = 0.0;
+    private DateTime lastUpdateTime = DateTime.UtcNow;
+    private DotNetObjectReference<ProductTracking>? objRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+       
+        if (ProductId.HasValue)
+        {
+            trackedProduct = await Db.Products.FirstOrDefaultAsync(p => p.Id == ProductId.Value);
+        }
+        
+        isLoading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            objRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("startLiveTracking", "liveTrackingMap", objRef);
+        }
+    }
+
+    [JSInvokable]
+    public void UpdateLocationFromBrowser(double lat, double lng)
+    {
+        currentLatitude = lat;
+        currentLongitude = lng;
+        lastUpdateTime = DateTime.UtcNow;
+        StateHasChanged();
+    }
+
+    private async Task SnapToCourier()
+    {
+        if (currentLatitude != 0.0) 
+        {
+            await JS.InvokeVoidAsync("recenterMapTo", currentLatitude, currentLongitude);
+        }
+    }
+
+    public void Dispose()
+    {
+        _ = JS.InvokeVoidAsync("stopLiveTracking");
+        objRef?.Dispose();
+    }
+}

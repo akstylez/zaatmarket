@@ -1,0 +1,270 @@
+﻿@using ZaatMarket.Services
+@using Microsoft.EntityFrameworkCore
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Components.Authorization
+@using ZaatMarket.Data
+@using ZaatMarket.Models
+
+@implements IDisposable
+@inject ICartService Cart
+@inject AuthenticationStateProvider AuthStateProvider
+@inject ApplicationDbContext Db
+@inject CurrencyStateService CurrencyState
+@rendermode InteractiveServer
+
+<nav class="topnav">
+    <div class="nav-inner">
+
+        <div class="brand-section">
+            <button class="hamburger-btn" @onclick="ToggleSidebar">☰</button>
+            
+            <a class="brand" href="/">
+                <img class="brand-logo" src="/images/logo.png" alt="ZaatMarket logo" />
+                <span class="brand-name mobile-hide">Z-A-A-T-T Marketplace</span>
+            </a>
+        </div>
+
+        <div class="nav-right">
+            
+            <div class="currency-selector-wrapper">
+                <select class="currency-dropdown" value="@CurrencyState.TargetCurrency" @onchange="HandleCurrencySelection" disabled="@CurrencyState.IsLoadingRate">
+                    <option value="USD">USD ($)</option>
+                    <option value="ZWG">ZWG (ZiG)</option>
+                    <option value="ZAR">ZAR (R)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="GBP">GBP (£)</option>
+                    <option value="BWP">BWP (P)</option>
+                </select>
+                @if (CurrencyState.IsLoadingRate)
+                {
+                    <span class="rate-spinner" title="Getting exchange exchange rates...">⚡</span>
+                }
+            </div>
+
+            <a class="nav-link" id="nav-cart-icon" href="/cart">
+                <span class="mobile-hide">Cart</span>
+                @if (Cart?.Items?.Count > 0)
+                {
+                    <span class="cart-badge">@Cart.Items.Count</span>
+                }
+            </a>
+            
+            <a class="nav-account" href="/account" style="position: relative; display: flex; align-items: center; gap: 6px;">
+                <span class="mobile-hide">Account</span>
+                
+                @if (currentUser != null && currentUser.IsPremiumAgent)
+                {
+                    <span class="nav-pro-badge">PRO</span>
+                }
+
+                @if (hasUnreadMessages)
+                {
+                    <span style="position: absolute; top: -2px; right: -8px; width: 10px; height: 10px; background-color: #ef4444; border-radius: 50%; border: 2px solid white;"></span>
+                }
+            </a>
+        </div>
+
+    </div>
+</nav>
+
+<div class="@OverlayClass" @onclick="CloseSidebar"></div>
+
+<div class="@SidebarClass">
+    <div class="sidebar-header">
+        <h3>Menu</h3>
+        <button class="close-btn" @onclick="CloseSidebar">✕</button>
+    </div>
+    
+    <div class="sidebar-links">
+        <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All" @onclick="CloseSidebar">Home</NavLink>
+        
+        <div class="sidebar-category">Explore</div>
+        <NavLink class="sidebar-link" href="/products" @onclick="CloseSidebar">All Products</NavLink>
+        
+        <div class="sidebar-category">Seller Hub</div>
+        <NavLink class="sidebar-link" href="/sell" @onclick="CloseSidebar">Sell an Item</NavLink>
+        <NavLink class="sidebar-link" href="/my-listings" @onclick="CloseSidebar">My Listings</NavLink>
+
+        <div class="sidebar-category">Tools & Tracking</div>
+        <NavLink class="sidebar-link" href="/product-tracking" @onclick="CloseSidebar">📍 Live Tracker / Maps</NavLink>
+        <NavLink class="sidebar-link" href="/zaatt-ai" @onclick="CloseSidebar" style="color: #6366f1; font-weight: bold;">✨ ZAATT AI</NavLink>
+
+        <div class="sidebar-category">Premium</div>
+        @if (currentUser != null && currentUser.IsPremiumAgent)
+        {
+            <NavLink class="sidebar-link pro-agent-link" href="/agent-dashboard" @onclick="CloseSidebar">
+                ⚡ Premium Center
+            </NavLink>
+        }
+        else
+        {
+            <NavLink class="sidebar-link upgrade-link" href="/premium" @onclick="CloseSidebar">
+                ⭐ Upgrade to Pro
+            </NavLink>
+        }
+    </div>
+</div>
+
+<style>
+
+    .currency-selector-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-right: 15px;
+    }
+
+    .currency-dropdown {
+        padding: 6px 10px;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+        background: #f8fafc;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #0f172a;
+        outline: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+
+    .currency-dropdown:focus {
+        border-color: #ff6600;
+        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+    }
+
+    .currency-dropdown:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .rate-spinner {
+        font-size: 1.1rem;
+        animation: pulse 1s infinite ease-in-out;
+    }
+
+    @@keyframes pulse { 
+        0%, 100% { opacity: 0.4; transform: scale(0.9); } 
+        50% { opacity: 1; transform: scale(1.2); } 
+    }
+
+    .nav-pro-badge {
+        background: linear-gradient(135deg, #0f172a, #1e293b);
+        color: #fbbf24;
+        border: 1px solid #f59e0b;
+        padding: 2px 6px;
+        border-radius: 6px;
+        font-size: 0.65rem;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        box-shadow: 0 2px 8px rgba(245, 158, 11, 0.2);
+    }
+
+    .pro-agent-link {
+        background: #0f172a !important;
+        color: #fbbf24 !important;
+        border-left: 4px solid #f59e0b !important;
+        font-weight: 700 !important;
+        border-radius: 4px;
+        margin-top: 4px;
+    }
+
+    .upgrade-link {
+        background: #fef3c7 !important;
+        color: #d97706 !important;
+        border-left: 4px solid #f59e0b !important;
+        font-weight: 700 !important;
+        border-radius: 4px;
+        margin-top: 4px;
+    }
+
+    @@media (max-width: 768px) {
+        .currency-selector-wrapper {
+            margin-right: 5px;
+        }
+        
+        .currency-dropdown {
+            padding: 4px 6px;
+            font-size: 0.8rem;
+            max-width: 80px;
+        }
+
+        .mobile-hide {
+            display: none !important;
+        }
+        
+        #nav-cart-icon::before {
+            content: "🛒";
+            font-size: 1.3rem;
+        }
+        
+        .nav-account::before {
+            content: "👤";
+            font-size: 1.3rem;
+        }
+
+        .cart-badge {
+            position: absolute;
+            top: -6px;
+            right: -12px;
+            background: #ff6600;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: bold;
+        }
+
+        #nav-cart-icon {
+            position: relative;
+        }
+    }
+</style>
+
+@code {
+    private bool isSidebarOpen = false;
+    private bool hasUnreadMessages = false;
+    private ApplicationUser? currentUser;
+
+    private string SidebarClass => isSidebarOpen ? "sidebar open" : "sidebar";
+    private string OverlayClass => isSidebarOpen ? "sidebar-overlay open" : "sidebar-overlay";
+
+    private void ToggleSidebar() => isSidebarOpen = !isSidebarOpen;
+    private void CloseSidebar() => isSidebarOpen = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Cart != null) Cart.OnChange += HandleCartChanged;
+        if (CurrencyState != null) CurrencyState.OnCurrencyChanged += HandleCurrencyChanged;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = authState.User;
+        
+        if (user.Identity?.IsAuthenticated == true)
+        {
+            var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            if (!string.IsNullOrEmpty(userId))
+            {
+                currentUser = await Db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                hasUnreadMessages = await Db.Messages.AnyAsync(m => m.ReceiverId == userId && !m.IsRead);
+            }
+        }
+    }
+
+    private async Task HandleCurrencySelection(ChangeEventArgs e)
+    {
+        var selectedCode = e.Value?.ToString();
+        if (!string.IsNullOrWhiteSpace(selectedCode))
+        {
+            await CurrencyState.UpdateCurrencyAsync(selectedCode);
+        }
+    }
+
+    private void HandleCartChanged() => InvokeAsync(StateHasChanged);
+    private void HandleCurrencyChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        if (Cart != null) Cart.OnChange -= HandleCartChanged;
+        if (CurrencyState != null) CurrencyState.OnCurrencyChanged -= HandleCurrencyChanged;
+    }
+}

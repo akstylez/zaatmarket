@@ -1,0 +1,86 @@
+﻿@page "/products/category/{CategoryEncoded}"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Models
+@inject ZaatMarket.Data.ApplicationDbContext Db
+@inject NavigationManager Nav
+
+<div class="page-container">
+
+<h1>Category: @Category</h1>
+
+<div style="margin-bottom:12px;">
+    <button type="button" @onclick='() => Nav.NavigateTo("/products")'>← Back to Products</button>
+</div>
+
+<div style="margin-bottom:12px;">
+    <label><b>Search in this category</b></label><br />
+    <input placeholder="Search title/description..." @bind="search" @bind:event="oninput" style="width:320px;" />
+    <button type="button" @onclick="Apply">Apply</button>
+</div>
+
+@if (items is null)
+{
+    <p>Loading...</p>
+}
+else if (items.Count == 0)
+{
+    <p>No products found in this category.</p>
+}
+else
+{
+    <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap:12px;">
+        @foreach (var p in items)
+        {
+            <div style="border:1px solid #ddd; padding:12px; border-radius:10px;">
+                <a href="@($"/products/{p.Id}")" style="text-decoration:none;">
+                    <strong>@p.Title</strong>
+                </a>
+
+                <div style="display:flex; justify-content:space-between; margin-top:8px;">
+                    <div style="opacity:.75;">@p.Category</div>
+                    <strong>@p.Price.ToString("C")</strong>
+                </div>
+
+                <p style="margin-top:10px;">@Short(p.Description, 120)</p>
+            </div>
+        }
+    </div>
+}
+</div>
+
+@code {
+    [Parameter] public string CategoryEncoded { get; set; } = "";
+
+    private string Category = "";
+    private string search = "";
+    private List<Product>? items;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Decode URL-safe category back to normal text
+        Category = Uri.UnescapeDataString(CategoryEncoded);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var q = Db.Products.AsNoTracking().Where(p => p.Category == Category);
+
+        if (!string.IsNullOrWhiteSpace(search))
+            q = q.Where(p => p.Title.Contains(search) || p.Description.Contains(search));
+
+        items = await q.OrderByDescending(p => p.CreatedAtUtc).Take(300).ToListAsync();
+    }
+
+    private async Task Apply()
+    {
+        await LoadAsync();
+    }
+
+    private static string Short(string? text, int max)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return "";
+        return text.Length <= max ? text : text.Substring(0, max) + "...";
+    }
+}

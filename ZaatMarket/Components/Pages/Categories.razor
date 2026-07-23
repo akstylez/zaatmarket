@@ -1,0 +1,52 @@
+﻿@page "/categories"
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@inject ZaatMarket.Data.ApplicationDbContext Db
+
+<h1>Categories</h1>
+
+<div class="page-container">
+    <div class="section-title">Categories</div>
+
+    @if (cats is null)
+    {
+        <p>Loading...</p>
+    }
+    else if (cats.Count == 0)
+    {
+        <p class="muted">No categories yet.</p>
+    }
+    else
+    {
+        <div class="grid">
+            @foreach (var c in cats)
+            {
+                <a class="card" href="@($"/products/category/{Uri.EscapeDataString(c.Name)}")">
+                    <div class="card-title">@c.Name</div>
+                    <div class="muted">@c.Count product(s)</div>
+                </a>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<CategoryInfo>? cats;
+
+    private sealed class CategoryInfo
+    {
+        public string Name { get; set; } = "";
+        public int Count { get; set; }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        cats = await Db.Products.AsNoTracking()
+            .Where(p => p.Category != null && p.Category != "")
+            .GroupBy(p => p.Category)
+            .Select(g => new CategoryInfo { Name = g.Key!, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .ThenBy(x => x.Name)
+            .ToListAsync();
+    }
+}

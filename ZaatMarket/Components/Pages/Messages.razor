@@ -1,0 +1,680 @@
+﻿@page "/messages"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Models
+@using ZaatMarket.Data
+@using ZaatMarket.Services
+@attribute [Authorize]
+
+@inject PresenceService PresenceTracker
+@implements IDisposable
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject EmailSender EmailService
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Chat Center | Z-A-A-T-T</PageTitle>
+
+<div class="chat-container">
+    
+    <aside class="chat-sidebar">
+        <div class="sidebar-header">
+            <h2>Messages</h2>
+        </div>
+        
+        <div class="contacts-list">
+            @if (activeContacts.Count == 0)
+            {
+                <div class="no-contacts-msg">No messages yet.</div>
+            }
+            @foreach (var contact in activeContacts)
+            {
+                <div class="contact-card @(selectedContactId == contact.UserId ? "active" : "")" 
+                     @onclick="() => SelectContactAsync(contact.UserId)">
+                    
+                    <div class="avatar-wrap">
+                        @if (!string.IsNullOrWhiteSpace(contact.ProfilePictureUrl))
+                        {
+                            <img src="@contact.ProfilePictureUrl" alt="@contact.Username" class="avatar-img" />
+                        }
+                        else
+                        {
+                            <div class="avatar-initials">@contact.AvatarInitials</div>
+                        }
+                    </div>
+
+                    <div class="contact-info">
+                        <div class="contact-top">
+                            <h4>@contact.Username</h4>
+                            <span class="time">@contact.LastMessageTime</span>
+                        </div>
+                        <p class="preview @(contact.HasUnread ? "unread-text" : "")">
+                            @contact.LastMessagePreview
+                        </p>
+                    </div>
+                    @if (contact.HasUnread)
+                    {
+                        <div class="unread-dot"></div>
+                    }
+                </div>
+            }
+        </div>
+    </aside>
+
+    <main class="chat-main">
+        @if (string.IsNullOrEmpty(selectedContactId))
+        {
+            <div class="no-chat-selected">
+                <div class="icon">💬</div>
+                <h3>Your Conversations</h3>
+                <p>Select a chat from the left menu to start messaging.</p>
+            </div>
+        }
+        else
+        {
+            var currentContact = activeContacts.First(c => c.UserId == selectedContactId);
+
+            <header class="chat-header">
+                <div class="header-user-info" @onclick="OpenProfileModal" style="cursor: pointer;" title="Click to view profile">
+                    <div class="avatar-wrap">
+                        @if (!string.IsNullOrWhiteSpace(currentContact.ProfilePictureUrl))
+                        {
+                            <img src="@currentContact.ProfilePictureUrl" alt="@currentContact.Username" class="avatar-img" />
+                        }
+                        else
+                        {
+                            <div class="avatar-initials">@currentContact.AvatarInitials</div>
+                        }
+                    </div>
+                    <div class="header-text">
+                        <h3>@currentContact.Username</h3>
+                        @if (PresenceTracker.IsOnline(currentContact.UserId))
+                        {
+                            <span class="status online">● Online</span>
+                        }
+                        else
+                        {
+                            <span class="status offline">Last seen @currentContact.LastSeen.ToLocalTime().ToString("MMM dd, HH:mm")</span>
+                        }
+                    </div>
+                </div>
+                
+                <button class="view-profile-btn" @onclick="OpenProfileModal">View Profile</button>
+            </header>
+
+            <div class="chat-history" id="chat-window">
+                @foreach (var msg in chatHistory)
+                {
+                    <div class="bubble-wrapper @(msg.SenderId == currentUserId ? "mine" : "theirs")">
+                        <div class="chat-bubble">
+                            
+                            @if (msg.MessageType == "Text" || string.IsNullOrEmpty(msg.MessageType))
+                            {
+                                <p>@msg.Content</p>
+                            }
+                            else if (msg.MessageType == "Image")
+                            {
+                                <img src="@msg.MediaUrl" class="chat-media-img" alt="Attached Image" />
+                                @if(!string.IsNullOrEmpty(msg.Content)) { <p class="media-caption">@msg.Content</p> }
+                            }
+                            else if (msg.MessageType == "Video")
+                            {
+                                <video src="@msg.MediaUrl" controls class="chat-media-video"></video>
+                            }
+                            else if (msg.MessageType == "Audio")
+                            {
+                                <audio src="@msg.MediaUrl" controls class="chat-media-audio"></audio>
+                            }
+
+                            <div class="msg-footer">
+                                <span class="timestamp">@msg.SentAtUtc.ToLocalTime().ToString("HH:mm")</span>
+                                
+                                @if (msg.SenderId == currentUserId)
+                                {
+                                    <span class="read-receipt">
+                                        @if (msg.IsRead)
+                                        {
+                                            <span style="color: #3b82f6;">✓✓</span>
+                                        }
+                                        else if (PresenceTracker.IsOnline(msg.ReceiverId))
+                                        {
+                                            <span style="color: #cbd5e1;">✓✓</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color: #cbd5e1;">✓</span>
+                                        }
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+                <div id="chat-anchor" style="height: 1px;"></div>
+            </div>
+
+            <div class="chat-input-area">
+                <InputFile OnChange="HandleMediaUpload" accept="image/*,video/*" id="mediaUpload" style="display:none;" />
+                <label for="mediaUpload" class="chat-btn attachment-btn" title="Send Picture/Video">📎</label>
+
+                <input type="text" class="chat-input" 
+                       placeholder="Type your message..." 
+                       @bind="newMessage" 
+                       @bind:event="oninput" 
+                       @onkeyup="HandleEnter" />
+                
+                @if (!string.IsNullOrWhiteSpace(newMessage))
+                {
+                    <button class="send-btn" @onclick="SendMessageAsync">Send</button>
+                }
+                else
+                {
+                    <button class="chat-btn mic-btn @(isRecording ? "recording" : "")" @onclick="ToggleRecording" title="Voice Note">
+                        @(isRecording ? "⏹️" : "🎙️")
+                    </button>
+                }
+            </div>
+        }
+    </main>
+</div>
+
+@if (showProfileModal && selectedUserProfile != null)
+{
+    <div class="modal-backdrop" @onclick="CloseProfileModal">
+        <div class="modal-card" @onclick:stopPropagation="true">
+            <button class="modal-close" @onclick="CloseProfileModal">✕</button>
+            
+            <div class="modal-header-bg"></div>
+            
+            <div class="modal-profile-content">
+                <div class="modal-avatar-container">
+                    @if (!string.IsNullOrWhiteSpace(selectedUserProfile.ProfilePictureUrl))
+                    {
+                        <img src="@selectedUserProfile.ProfilePictureUrl" alt="Profile" class="modal-avatar" />
+                    }
+                    else
+                    {
+                        <div class="modal-avatar-initials">@selectedUserProfile.DisplayName?.Substring(0,1).ToUpper() ?? selectedUserProfile.UserName?.Substring(0,1).ToUpper()</div>
+                    }
+                </div>
+                
+                <h2 class="modal-username">@(!string.IsNullOrWhiteSpace(selectedUserProfile.DisplayName) ? selectedUserProfile.DisplayName : selectedUserProfile.UserName)</h2>
+                
+                <div class="modal-meta">
+                    <div class="meta-item">
+                        <span class="meta-icon">📍</span>
+                        <span>@(string.IsNullOrWhiteSpace(selectedUserProfile.Location) ? "Location not set" : selectedUserProfile.Location)</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-icon">🗣️</span>
+                        <span>Speaks @(string.IsNullOrWhiteSpace(selectedUserProfile.PreferredLanguage) ? "English" : selectedUserProfile.PreferredLanguage)</span>
+                    </div>
+                </div>
+                
+                <button class="modal-msg-btn" @onclick="CloseProfileModal">Continue Chatting</button>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    window.scrollToBottom = (elementId) => {
+        var element = document.getElementById(elementId);
+        if (element) {
+            element.scrollTop = element.scrollHeight;
+        }
+    }
+</script>
+
+<style>
+    footer, .footer, #footer, .pb-3 { display: none !important; }
+
+    .chat-container { display: flex; height: calc(100vh - 70px); background: #ffffff; border-top: 1px solid #e2e8f0; font-family: system-ui, -apple-system, sans-serif; }
+    
+    .chat-sidebar { width: 350px; background: #f8fafc; border-right: 1px solid #e2e8f0; display: flex; flex-direction: column; }
+    .sidebar-header { padding: 24px; border-bottom: 1px solid #e2e8f0; background: #ffffff; }
+    .sidebar-header h2 { margin: 0; font-size: 1.5rem; color: #0f172a; font-weight: 800; }
+    
+    .contacts-list { flex-grow: 1; overflow-y: auto; }
+    .no-contacts-msg { padding: 30px; text-align: center; color: #64748b; font-size: 0.95rem; }
+    .contact-card { display: flex; padding: 16px 20px; border-bottom: 1px solid #f1f5f9; cursor: pointer; transition: 0.2s; align-items: center; gap: 15px; position: relative; }
+    .contact-card:hover { background: #ffffff; }
+    .contact-card.active { background: #ffffff; box-shadow: inset 4px 0 0 #ff6600; } 
+    
+    .avatar-wrap { width: 48px; height: 48px; flex-shrink: 0; border-radius: 50%; overflow: hidden; background: #cbd5e1; border: 2px solid #ffffff; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .avatar-img { width: 100%; height: 100%; object-fit: cover; }
+    .avatar-initials { width: 100%; height: 100%; background: linear-gradient(135deg, #0f172a, #334155); color: white; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; }
+    
+    .contact-info { flex-grow: 1; overflow: hidden; }
+    .contact-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
+    .contact-top h4 { margin: 0; font-size: 1.05rem; color: #0f172a; font-weight: 700; }
+    .time { font-size: 0.75rem; color: #64748b; font-weight: 600; }
+    .preview { margin: 0; font-size: 0.9rem; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .unread-text { font-weight: 700; color: #0f172a; }
+    .unread-dot { width: 12px; height: 12px; background: #ff6600; border-radius: 50%; position: absolute; right: 20px; box-shadow: 0 0 0 3px #ffffff; }
+    
+    .chat-main { flex-grow: 1; display: flex; flex-direction: column; background: #f1f5f9; position: relative; }
+    .no-chat-selected { flex-grow: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #64748b; background: #ffffff; }
+    .no-chat-selected .icon { font-size: 4rem; margin-bottom: 20px; opacity: 0.2; }
+    .no-chat-selected h3 { color: #0f172a; margin: 0 0 8px 0; }
+    
+    .chat-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 24px; background: #ffffff; border-bottom: 1px solid #e2e8f0; box-shadow: 0 2px 10px rgba(0,0,0,0.02); z-index: 10; }
+    .header-user-info { display: flex; align-items: center; gap: 15px; }
+    .header-text h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
+    
+    /* NEW: Online Status Classes */
+    .status.online { color: #10b981; font-weight: 700; font-size: 0.8rem; }
+    .status.offline { color: #64748b; font-size: 0.8rem; }
+    
+    .view-profile-btn { background: #f8fafc; border: 1px solid #cbd5e1; color: #0f172a; padding: 8px 16px; border-radius: 8px; font-size: 0.85rem; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .view-profile-btn:hover { background: #e2e8f0; }
+    
+    .chat-history { flex-grow: 1; padding: 24px; overflow-y: auto; display: flex; flex-direction: column; gap: 16px; scroll-behavior: smooth; }
+    .bubble-wrapper { display: flex; width: 100%; }
+    .bubble-wrapper.mine { justify-content: flex-end; }
+    .bubble-wrapper.theirs { justify-content: flex-start; }
+    
+    .chat-bubble { max-width: 70%; padding: 14px 18px; border-radius: 18px; position: relative; box-shadow: 0 2px 5px rgba(0,0,0,0.05); }
+    .bubble-wrapper.mine .chat-bubble { background: #0f172a; color: #ffffff; border-bottom-right-radius: 4px; }
+    .bubble-wrapper.theirs .chat-bubble { background: #ffffff; color: #0f172a; border-bottom-left-radius: 4px; border: 1px solid #e2e8f0; }
+    
+    .chat-bubble p { margin: 0; font-size: 0.95rem; line-height: 1.5; }
+    .chat-media-img { max-width: 100%; max-height: 300px; border-radius: 12px; margin-bottom: 6px; }
+    .chat-media-video { max-width: 100%; max-height: 300px; border-radius: 12px; }
+    .chat-media-audio { width: 250px; height: 40px; margin: 5px 0; }
+    .media-caption { font-size: 0.9rem; margin-top: 4px; }
+
+    /* NEW: WhatsApp Tick CSS */
+    .msg-footer { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
+    .bubble-wrapper.mine .timestamp { color: rgba(255,255,255,0.7); }
+    .bubble-wrapper.theirs .timestamp { color: #94a3b8; }
+    .timestamp { font-size: 0.7rem; font-weight: 600; }
+    .read-receipt { font-size: 0.75rem; display: flex; align-items: center; line-height: 1; letter-spacing: -1px; }
+    
+    .chat-input-area { display: flex; gap: 12px; align-items: center; padding: 20px 24px; background: #ffffff; border-top: 1px solid #e2e8f0; }
+    .chat-btn { width: 44px; height: 44px; border-radius: 50%; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .attachment-btn { background: transparent; color: #64748b; font-size: 1.4rem; }
+    .attachment-btn:hover { background: #f1f5f9; color: #0f172a; }
+    
+    .chat-input { flex-grow: 1; padding: 14px 20px; border: 1px solid #cbd5e1; border-radius: 30px; background: #f8fafc; font-size: 1rem; outline: none; transition: 0.2s; }
+    .chat-input:focus { border-color: #ff6600; background: #ffffff; }
+    
+    .send-btn { background: #ff6600; color: white; border: none; border-radius: 30px; padding: 0 28px; height: 44px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 10px rgba(255, 102, 0, 0.2); }
+    .send-btn:hover { background: #e65c00; transform: translateY(-1px); }
+    
+    .mic-btn { background: #128c7e; color: white; font-size: 1.1rem; }
+    .mic-btn.recording { background: #ef4444; animation: pulse 1.5s infinite; }
+
+    .modal-backdrop { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; z-index: 9999; animation: fadeIn 0.2s ease-out; }
+    .modal-card { background: white; width: 100%; max-width: 400px; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25); position: relative; animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1); }
+    .modal-close { position: absolute; top: 16px; right: 16px; background: rgba(0,0,0,0.2); color: white; border: none; width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 1.2rem; z-index: 10; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+    .modal-close:hover { background: rgba(0,0,0,0.4); }
+    
+    .modal-header-bg { height: 120px; background: linear-gradient(135deg, #0f172a, #ff6600); }
+    .modal-profile-content { padding: 0 30px 30px 30px; text-align: center; }
+    .modal-avatar-container { width: 100px; height: 100px; border-radius: 50%; margin: -50px auto 16px auto; border: 4px solid white; background: white; overflow: hidden; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .modal-avatar { width: 100%; height: 100%; object-fit: cover; }
+    .modal-avatar-initials { width: 100%; height: 100%; background: #0f172a; color: white; display: flex; align-items: center; justify-content: center; font-size: 2.5rem; font-weight: bold; }
+    
+    .modal-username { margin: 0 0 20px 0; font-size: 1.5rem; color: #0f172a; font-weight: 800; }
+    .modal-meta { display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px; text-align: left; background: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #e2e8f0; }
+    .meta-item { display: flex; align-items: center; gap: 12px; color: #475569; font-weight: 600; font-size: 0.95rem; }
+    .meta-icon { font-size: 1.2rem; }
+    
+    .modal-msg-btn { width: 100%; background: #0f172a; color: white; padding: 14px; border: none; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+    .modal-msg-btn:hover { background: #1e293b; }
+
+    @@keyframes pulse { 0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); } 70% { transform: scale(1.05); box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); } 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); } }
+    @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+    @@media (max-width: 768px) {
+        .chat-container { height: 100dvh; margin: -20px; }
+        .chat-input-area { padding: 12px; gap: 8px; padding-bottom: env(safe-area-inset-bottom, 12px); }
+        .chat-input { padding: 16px 20px; font-size: 16px; }
+        .mic-btn, .send-btn, .attachment-btn { width: 52px; height: 52px; flex-shrink: 0; }
+        .mic-btn { font-size: 1.4rem; }
+    }
+</style>
+
+@code {
+    private string? currentUserId;
+    private string selectedContactId = "";
+    private string newMessage = "";
+    private bool isRecording = false;
+
+    [SupplyParameterFromQuery(Name = "user")]
+    public string? QueryUserId { get; set; }
+
+    [SupplyParameterFromQuery(Name = "product")]
+    public string? QueryProductName { get; set; }
+    
+    // modal state
+    private bool showProfileModal = false;
+    private ApplicationUser? selectedUserProfile = null;
+
+    public class ContactPreview
+    {
+        public string UserId { get; set; } = "";
+        public string Username { get; set; } = "";
+        public string ProfilePictureUrl { get; set; } = "";
+        public string AvatarInitials { get; set; } = "";
+        public string LastMessagePreview { get; set; } = "";
+        public string LastMessageTime { get; set; } = "";
+        public bool HasUnread { get; set; }
+        public DateTime LastSeen { get; set; } // NEW: Tracks last seen time
+    }
+
+    private List<ContactPreview> activeContacts = new();
+    private List<Message> chatHistory = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Subscribe to real-time presence events
+        PresenceTracker.OnPresenceChanged += RefreshUI;
+
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        currentUserId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(currentUserId))
+        {
+            await LoadContactsAsync();
+
+            if (!string.IsNullOrEmpty(QueryUserId) && QueryUserId != currentUserId)
+            {
+                if (!activeContacts.Any(c => c.UserId == QueryUserId))
+                {
+                    var newUser = await Db.Users.FirstOrDefaultAsync(u => u.Id == QueryUserId);
+                    if (newUser != null)
+                    {
+                        string displayUsername = !string.IsNullOrWhiteSpace(newUser.DisplayName) 
+                                                    ? newUser.DisplayName 
+                                                    : (newUser.UserName ?? "User");
+
+                        activeContacts.Insert(0, new ContactPreview {
+                            UserId = newUser.Id,
+                            Username = displayUsername,
+                            ProfilePictureUrl = newUser.ProfilePictureUrl ?? "",
+                            AvatarInitials = displayUsername.Substring(0, 1).ToUpper(),
+                            LastMessagePreview = "New Conversation",
+                            LastMessageTime = "Now",
+                            HasUnread = false,
+                            LastSeen = newUser.LastSeenUtc
+                        });
+                    }
+                }
+
+                await SelectContactAsync(QueryUserId);
+
+                if (!string.IsNullOrEmpty(QueryProductName))
+                {
+                    newMessage = $"Hi! I am interested in your product: {QueryProductName}. Is it still available?";
+                }
+            }
+        }
+    }
+
+    private void RefreshUI()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private async Task LoadContactsAsync()
+    {
+        var allMyMessages = await Db.Messages
+            .Where(m => m.SenderId == currentUserId || m.ReceiverId == currentUserId)
+            .OrderByDescending(m => m.SentAtUtc)
+            .ToListAsync();
+
+        var uniqueContactIds = allMyMessages
+            .Select(m => m.SenderId == currentUserId ? m.ReceiverId : m.SenderId)
+            .Distinct()
+            .ToList();
+
+        var users = await Db.Users
+            .Where(u => uniqueContactIds.Contains(u.Id))
+            .ToListAsync();
+
+        activeContacts.Clear();
+
+        foreach (var id in uniqueContactIds)
+        {
+            var otherUser = users.FirstOrDefault(u => u.Id == id);
+            var lastMsg = allMyMessages.First(m => 
+                (m.SenderId == currentUserId && m.ReceiverId == id) || 
+                (m.SenderId == id && m.ReceiverId == currentUserId));
+            
+            string displayUsername = !string.IsNullOrWhiteSpace(otherUser?.DisplayName) 
+                                        ? otherUser.DisplayName 
+                                        : (otherUser?.UserName ?? "User");
+            
+            string preview = lastMsg.MessageType == "Image" ? "📷 Image" : 
+                             lastMsg.MessageType == "Video" ? "🎥 Video" : 
+                             lastMsg.MessageType == "Audio" ? "🎙️ Voice Note" : 
+                             lastMsg.Content;
+
+            activeContacts.Add(new ContactPreview {
+                UserId = id,
+                Username = displayUsername,
+                ProfilePictureUrl = otherUser?.ProfilePictureUrl ?? "",
+                AvatarInitials = displayUsername.Substring(0, 1).ToUpper(),
+                LastMessagePreview = preview,
+                LastMessageTime = lastMsg.SentAtUtc.ToLocalTime().ToString("HH:mm"),
+                HasUnread = !lastMsg.IsRead && lastMsg.ReceiverId == currentUserId,
+                LastSeen = otherUser?.LastSeenUtc ?? DateTime.UtcNow
+            });
+        }
+    }
+
+    private async Task SelectContactAsync(string contactId)
+    {
+        selectedContactId = contactId;
+        
+        chatHistory = await Db.Messages
+            .Where(m => (m.SenderId == currentUserId && m.ReceiverId == contactId) || 
+                        (m.SenderId == contactId && m.ReceiverId == currentUserId))
+            .OrderBy(m => m.SentAtUtc)
+            .ToListAsync();
+
+        var unreadMessages = chatHistory.Where(m => m.ReceiverId == currentUserId && !m.IsRead).ToList();
+        if (unreadMessages.Any())
+        {
+            foreach (var msg in unreadMessages)
+            {
+                msg.IsRead = true;
+            }
+            await Db.SaveChangesAsync();
+            
+            var contact = activeContacts.FirstOrDefault(c => c.UserId == contactId);
+            if (contact != null) contact.HasUnread = false;
+        }
+        
+        await ScrollToBottomAsync();
+    }
+
+    private async Task OpenProfileModal()
+    {
+        if (!string.IsNullOrEmpty(selectedContactId))
+        {
+            selectedUserProfile = await Db.Users.FirstOrDefaultAsync(u => u.Id == selectedContactId);
+            if (selectedUserProfile != null)
+            {
+                showProfileModal = true;
+            }
+        }
+    }
+
+    private void CloseProfileModal()
+    {
+        showProfileModal = false;
+        selectedUserProfile = null;
+    }
+
+    private async Task HandleEnter(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter")
+        {
+            await SendMessageAsync();
+        }
+    }
+
+    private async Task SendMessageAsync()
+    {
+        if (string.IsNullOrWhiteSpace(newMessage) || string.IsNullOrEmpty(selectedContactId)) return;
+
+        string messageContent = newMessage;
+        
+        var msg = new Message 
+        { 
+            SenderId = currentUserId!, 
+            ReceiverId = selectedContactId, 
+            Content = messageContent,
+            MessageType = "Text",
+            SentAtUtc = DateTime.UtcNow,
+            IsRead = false 
+        };
+
+        Db.Messages.Add(msg);
+        await Db.SaveChangesAsync();
+
+        chatHistory.Add(msg);
+        newMessage = "";
+        
+        await LoadContactsAsync();
+        await NotifyReceiverOffline(selectedContactId, messageContent);
+        await ScrollToBottomAsync();
+    }
+
+    private async Task HandleMediaUpload(InputFileChangeEventArgs e)
+    {
+        if (string.IsNullOrEmpty(selectedContactId)) return;
+
+        var file = e.File;
+        bool isVideo = file.ContentType.StartsWith("video/");
+        
+        var folder = Path.Combine(Env.WebRootPath, "chat-media");
+        Directory.CreateDirectory(folder);
+        var fileName = $"{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+        var filePath = Path.Combine(folder, fileName);
+
+        using var stream = file.OpenReadStream(maxAllowedSize: 20971520);
+        using var fs = new FileStream(filePath, FileMode.Create);
+        await stream.CopyToAsync(fs);
+
+        var msg = new Message 
+        { 
+            SenderId = currentUserId!, 
+            ReceiverId = selectedContactId, 
+            MessageType = isVideo ? "Video" : "Image",
+            MediaUrl = $"/chat-media/{fileName}",
+            Content = "", 
+            SentAtUtc = DateTime.UtcNow,
+            IsRead = false 
+        };
+
+        Db.Messages.Add(msg);
+        await Db.SaveChangesAsync();
+        
+        chatHistory.Add(msg);
+        await LoadContactsAsync();
+        await NotifyReceiverOffline(selectedContactId, isVideo ? "Sent a video" : "Sent an image");
+        await ScrollToBottomAsync();
+    }
+
+    private async Task ToggleRecording()
+    {
+        if (string.IsNullOrEmpty(selectedContactId)) return;
+
+        if (!isRecording)
+        {
+            isRecording = true;
+            await JSRuntime.InvokeVoidAsync("audioRecorder.start");
+        }
+        else
+        {
+            isRecording = false;
+            var base64Audio = await JSRuntime.InvokeAsync<string>("audioRecorder.stopAndGetBase64");
+            
+            if (!string.IsNullOrEmpty(base64Audio))
+            {
+                await SaveAndSendVoiceNote(base64Audio);
+            }
+        }
+    }
+
+    private async Task SaveAndSendVoiceNote(string base64)
+    {
+        var bytes = Convert.FromBase64String(base64.Split(',')[1]);
+        
+        var folder = Path.Combine(Env.WebRootPath, "chat-media");
+        Directory.CreateDirectory(folder);
+        var fileName = $"voicenote_{Guid.NewGuid()}.webm";
+        var filePath = Path.Combine(folder, fileName);
+
+        await File.WriteAllBytesAsync(filePath, bytes);
+
+        var msg = new Message 
+        { 
+            SenderId = currentUserId!, 
+            ReceiverId = selectedContactId, 
+            MessageType = "Audio",
+            MediaUrl = $"/chat-media/{fileName}",
+            Content = "Voice Note",
+            SentAtUtc = DateTime.UtcNow,
+            IsRead = false
+        };
+
+        Db.Messages.Add(msg);
+        await Db.SaveChangesAsync();
+        
+        chatHistory.Add(msg);
+        StateHasChanged();
+        await LoadContactsAsync();
+        await NotifyReceiverOffline(selectedContactId, "Sent a voice note");
+        await ScrollToBottomAsync();
+    }
+
+    private async Task NotifyReceiverOffline(string receiverId, string contentPreview)
+    {
+        var receiver = await Db.Users.FindAsync(receiverId);
+        if (receiver != null && !string.IsNullOrWhiteSpace(receiver.Email))
+        {
+            var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+            var currentUser = await UserManager.GetUserAsync(authState.User);
+            var senderName = !string.IsNullOrWhiteSpace(currentUser?.DisplayName) 
+                                ? currentUser.DisplayName 
+                                : (currentUser?.UserName ?? "A user");
+            try
+            {
+                await EmailService.SendOfflineChatNotificationAsync(receiver.Email, senderName, contentPreview);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"MailKit failed to send: {ex.Message}");
+            }
+        }
+    }
+
+    private async Task ScrollToBottomAsync()
+    {
+        try
+        {
+            await JSRuntime.InvokeVoidAsync("scrollToBottom", "chat-window");
+        }
+        catch { }
+    }
+
+    public void Dispose()
+    {
+        // Prevent memory leaks when the component is destroyed
+        PresenceTracker.OnPresenceChanged -= RefreshUI;
+    }
+}

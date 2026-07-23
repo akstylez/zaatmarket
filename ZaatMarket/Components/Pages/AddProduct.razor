@@ -1,0 +1,366 @@
+﻿@page "/sell"
+@rendermode InteractiveServer
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Hosting
+@inject IWebHostEnvironment Env
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using ZaatMarket.Models
+@attribute [Authorize]
+
+@inject ZaatMarket.Data.ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>Sell an Item | Z-A-A-T-T</PageTitle>
+
+<div class="sell-page-wrapper">
+    <div class="sell-container">
+        <header class="sell-header">
+            <div>
+                <h1 class="page-title">List a Product</h1>
+                <p class="page-subtitle">Add details, pricing, and inventory to publish to the marketplace.</p>
+                
+                <div style="margin-top: 12px;">
+                    @if (accountType == "Business")
+                    {
+                        <span style="background: #1e293b; color: #ff6600; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #ff6600;">
+                            🏢 Listing as a Verified Business
+                        </span>
+                    }
+                    else
+                    {
+                        <span style="background: #ffffff; color: #64748b; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #cbd5e1;">
+                            👤 Listing as an Individual
+                        </span>
+                    }
+                </div>
+            </div>
+            <button type="button" class="btn-ghost-header" @onclick='() => Nav.NavigateTo("/products")'>✕ Cancel</button>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-error">
+                <span class="alert-icon">⚠️</span> @error
+            </div>
+        }
+        @if (!string.IsNullOrWhiteSpace(imageError))
+        {
+            <div class="alert alert-warning">
+                <span class="alert-icon">📸</span> @imageError
+            </div>
+        }
+
+        <div class="sell-card">
+            <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+                <DataAnnotationsValidator />
+                
+                <div class="form-layout">
+                    <div class="form-main">
+                        <section class="form-section">
+                            <h3 class="section-title">Basic Information</h3>
+                            
+                            <div class="field">
+                                <label class="label">Product Title <span class="req">*</span></label>
+                                <InputText class="input modern-input" @bind-Value="model.Title" placeholder="e.g. Apple MacBook Pro 14&quot;" />
+                                <ValidationMessage For="@(() => model.Title)" class="val-message" />
+                            </div>
+
+                            <div class="field">
+                                <label class="label">Description <span class="req">*</span></label>
+                                <InputTextArea class="textarea modern-input" @bind-Value="model.Description" rows="6" placeholder="Describe the condition, features, and specs..." />
+                                <ValidationMessage For="@(() => model.Description)" class="val-message" />
+                            </div>
+                        </section>
+
+                        <section class="form-section">
+                            <h3 class="section-title">Media</h3>
+                            
+                            <div class="field">
+                                <label class="label">Product Image</label>
+                                <div class="upload-dropzone @(selectedFile != null ? "has-file" : "")">
+                                    <InputFile OnChange="OnFileSelected" class="file-input-hidden" id="fileUpload" />
+                                    
+                                    @if (!string.IsNullOrWhiteSpace(model.ImagePath))
+                                    {
+                                        <div class="preview-container">
+                                            <img src="@model.ImagePath" alt="Preview" class="image-preview" />
+                                            <label for="fileUpload" class="change-img-btn">Change Photo</label>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <label for="fileUpload" class="upload-label-area">
+                                            <span class="upload-icon">📤</span>
+                                            <span class="upload-text">Click to upload an image</span>
+                                            <span class="upload-hint">JPG, PNG, WEBP, HEIC up to 3MB</span>
+                                        </label>
+                                    }
+                                </div>
+                            </div>
+                        </section>
+                    </div>
+
+                    <div class="form-sidebar">
+                        <section class="form-section config-section">
+                            <h3 class="section-title">Expansion</h3>
+                            <div class="field">
+                                <label class="label">Category <span class="req">*</span></label>
+                                <InputText class="input modern-input" @bind-Value="model.Category" placeholder="e.g. Electronics, Clothing" />
+                                <ValidationMessage For="@(() => model.Category)" class="val-message" />
+                            </div>
+                        </section>
+
+                        <section class="form-section config-section">
+                            <h3 class="section-title">Pricing & Inventory</h3>
+                            
+                            <div class="field">
+                                <label class="label">Price ($) <span class="req">*</span></label>
+                                <div class="input-with-prefix">
+                                    <span class="prefix">$</span>
+                                    <InputNumber class="input modern-input with-prefix" @bind-Value="model.Price" min="0.01" step="0.01" />
+                                </div>
+                                <ValidationMessage For="@(() => model.Price)" class="val-message" />
+                            </div>
+
+                            <div class="field">
+                                <label class="label">Stock Quantity <span class="req">*</span></label>
+                                <div class="input-with-prefix">
+                                    <span class="prefix">📦</span>
+                                    <InputNumber class="input modern-input with-prefix" @bind-Value="model.StockQuantity" min="1" step="1" />
+                                </div>
+                                <small class="field-hint">How many items are available for sale?</small>
+                                <ValidationMessage For="@(() => model.StockQuantity)" class="val-message" />
+                            </div>
+                        </section>
+                    </div>
+                </div>
+
+                <div class="form-footer">
+                    <button type="submit" class="btn-publish" disabled="@saving">
+                        @if (saving)
+                        {
+                            <span class="spinner"></span> <span>Publishing...</span>
+                        }
+                        else
+                        {
+                            <span>🚀 Publish Product</span>
+                        }
+                    </button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Modern Form Styling */
+    .sell-page-wrapper { min-height: 100vh; background: #f8fafc; padding: 40px 20px; font-family: system-ui, -apple-system, sans-serif; }
+    .sell-container { max-width: 1100px; margin: 0 auto; }
+    
+    .sell-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px; }
+    .page-title { font-size: 2rem; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; letter-spacing: -0.03em; }
+    .page-subtitle { font-size: 1.05rem; color: #64748b; margin: 0; }
+    
+    .btn-ghost-header { background: none; border: none; color: #64748b; font-weight: 600; cursor: pointer; padding: 8px 16px; border-radius: 8px; transition: 0.2s; }
+    .btn-ghost-header:hover { background: #f1f5f9; color: #0f172a; }
+
+    .alert { padding: 16px; border-radius: 12px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; font-weight: 500; }
+    .alert-error { background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; }
+    .alert-warning { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; }
+    
+    .sell-card { background: white; border-radius: 20px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.05); overflow: hidden; }
+    
+    .form-layout { display: grid; grid-template-columns: 2fr 1fr; border-bottom: 1px solid #f1f5f9; }
+    
+    .form-main { padding: 40px; border-right: 1px solid #f1f5f9; }
+    .form-sidebar { padding: 40px; background: #fafaf9; }
+    
+    .form-section { margin-bottom: 40px; }
+    .form-section:last-child { margin-bottom: 0; }
+    .section-title { font-size: 1.1rem; font-weight: 700; color: #0f172a; margin: 0 0 20px 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+    
+    .field { margin-bottom: 24px; }
+    .label { display: block; font-weight: 600; color: #334155; margin-bottom: 8px; font-size: 0.95rem; }
+    .req { color: #ef4444; }
+    .field-hint { display: block; color: #64748b; font-size: 0.85rem; margin-top: 6px; }
+    
+    .modern-input { width: 100%; padding: 12px 16px; border: 1px solid #cbd5e1; border-radius: 10px; font-size: 1rem; color: #0f172a; transition: all 0.2s ease; background: white; font-family: inherit; }
+    .modern-input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1); }
+    .modern-input::placeholder { color: #94a3b8; }
+    
+    .input-with-prefix { position: relative; display: flex; align-items: center; }
+    .prefix { position: absolute; left: 16px; color: #64748b; font-weight: 600; font-size: 1.1rem; }
+    .with-prefix { padding-left: 40px; }
+    
+   
+    .upload-dropzone { border: 2px dashed #cbd5e1; border-radius: 16px; padding: 4px; text-align: center; background: #f8fafc; transition: all 0.2s ease; position: relative; }
+    .upload-dropzone:hover { border-color: #94a3b8; background: #f1f5f9; }
+    .upload-dropzone.has-file { border-style: solid; border-color: #e2e8f0; background: white; }
+    
+    .file-input-hidden { display: none; }
+    .upload-label-area { display: flex; flex-direction: column; align-items: center; padding: 40px 20px; cursor: pointer; }
+    .upload-icon { font-size: 2.5rem; margin-bottom: 12px; }
+    .upload-text { font-weight: 600; color: #334155; font-size: 1.1rem; margin-bottom: 4px; }
+    .upload-hint { color: #94a3b8; font-size: 0.9rem; }
+    
+    .preview-container { position: relative; border-radius: 12px; overflow: hidden; background: #000; display: flex; justify-content: center; }
+    .image-preview { width: 100%; max-height: 350px; object-fit: contain; }
+    .change-img-btn { position: absolute; bottom: 16px; background: rgba(0,0,0,0.7); color: white; padding: 8px 16px; border-radius: 8px; font-weight: 600; cursor: pointer; backdrop-filter: blur(4px); transition: 0.2s; }
+    .change-img-btn:hover { background: rgba(0,0,0,0.9); }
+
+    .val-message { color: #ef4444; font-size: 0.85rem; display: block; margin-top: 6px; font-weight: 500; }
+    
+    .form-footer { padding: 24px 40px; background: #f8fafc; display: flex; justify-content: flex-end; }
+    .btn-publish { background: #0f172a; color: white; border: none; padding: 14px 32px; border-radius: 10px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: all 0.2s ease; display: flex; align-items: center; gap: 10px; }
+    .btn-publish:hover:not(:disabled) { background: #2563eb; transform: translateY(-2px); box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2); }
+    .btn-publish:disabled { background: #94a3b8; cursor: not-allowed; }
+    
+    .spinner { width: 18px; height: 18px; border: 3px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    @@media (max-width: 900px) {
+        .form-layout { grid-template-columns: 1fr; }
+        .form-sidebar { border-top: 1px solid #f1f5f9; }
+        .form-main, .form-sidebar { padding: 24px; }
+        .form-footer { padding: 20px 24px; }
+        .btn-publish { width: 100%; justify-content: center; }
+    }
+</style>
+
+@code {
+
+    private Product model = new() { Price = 1, StockQuantity = 1 }; 
+    private EditContext editContext = default!;
+    private string? error;
+
+    private IBrowserFile? selectedFile;
+    private string? imageError;
+    private bool saving;
+    private string accountType = "Individual";
+
+    protected override async Task OnInitializedAsync()
+    {
+        editContext = new EditContext(model);
+        
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        
+        if (!string.IsNullOrWhiteSpace(userId))
+        {
+            var user = await Db.Users.FindAsync(userId);
+            if (user != null)
+            {
+                accountType = user.AccountType ?? "Individual";
+            }
+        }
+    }
+
+    private void OnFileSelected(InputFileChangeEventArgs e)
+    {
+        imageError = null;
+        selectedFile = e.File;
+    }
+
+    private async Task SaveAsync()
+    {
+        error = null;
+        imageError = null;
+        saving = true;
+
+        try
+        {
+            if (!editContext.Validate())
+            {
+                saving = false;
+                return;
+            }
+
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+            if (string.IsNullOrWhiteSpace(userId))
+            {
+                error = "You must be logged in to sell.";
+                saving = false;
+                return;
+            }
+
+            model.OwnerUserId = userId;
+            model.CreatedAtUtc = DateTime.UtcNow;
+
+            if (selectedFile is not null)
+            {
+                var path = await SaveImageAsync(selectedFile);
+                if (path is null)
+                {
+                    saving = false;
+                    return; 
+                }
+                model.ImagePath = path;
+            }
+
+            Db.Products.Add(model);
+            await Db.SaveChangesAsync();
+
+
+            model = new Product { Price = 1, StockQuantity = 1 };
+            editContext = new EditContext(model);
+            selectedFile = null;
+
+            Nav.NavigateTo("/products", forceLoad: true);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task<string?> SaveImageAsync(IBrowserFile file)
+    {
+        const long maxSize = 10 * 1024 * 1024;
+
+        if (file.Size > maxSize)
+        {
+            imageError = "Image too large (max 10MB).";
+            return null;
+        }
+
+        var allowed = new[] { "image/jpeg", "image/png", "image/webp", "image/heic" };
+        if (!allowed.Contains(file.ContentType))
+        {
+            imageError = "Only JPG, PNG, WEBP or HEIC images allowed.";
+            return null;
+        }
+
+        var ext = Path.GetExtension(file.Name);
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            ext = file.ContentType switch
+            {
+                "image/jpeg" => ".jpg",
+                "image/png" => ".png",
+                "image/webp" => ".webp",
+                "image/heic" => ".heic",
+                _ => ".img"
+            };
+        }
+
+        var fileName = $"{Guid.NewGuid():N}{ext}";
+        var uploadsDir = Path.Combine(Env.WebRootPath, "uploads");
+        Directory.CreateDirectory(uploadsDir);
+
+        var fullPath = Path.Combine(uploadsDir, fileName);
+
+        await using var stream = file.OpenReadStream(maxSize);
+        await using var fs = File.Create(fullPath);
+        await stream.CopyToAsync(fs);
+
+        return $"/uploads/{fileName}";
+    }
+}

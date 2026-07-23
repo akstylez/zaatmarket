@@ -1,0 +1,173 @@
+﻿@page "/edit-product/{Id:int}"
+@rendermode InteractiveServer
+
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Data
+@using ZaatMarket.Models
+@attribute [Authorize]
+
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>Edit Product - ZaatMarket</PageTitle>
+
+<div class="page-container">
+    <div class="edit-card">
+        <div class="card-header">
+            <h1>Edit Listing</h1>
+            <p>Update your product details below</p>
+        </div>
+
+        @if (model is null)
+        {
+            <div class="loading-state">
+                <span class="spinner">↻</span> Loading product details...
+            </div>
+        }
+        else if (!isOwner)
+        {
+            <div class="error-box">
+                <span class="error-icon">⚠️</span>
+                You do not have permission to edit this product.
+            </div>
+        }
+        else
+        {
+            <EditForm Model="model" OnValidSubmit="SaveAsync" FormName="editProductForm">
+                <DataAnnotationsValidator />
+                <ValidationSummary class="text-danger" style="margin-bottom: 20px; font-weight: 500;" />
+                
+                <div class="form-group">
+                    <label class="custom-label">Product Title</label>
+                    <InputText class="custom-input" @bind-Value="model.Title" placeholder="e.g. iPhone 13 Pro Max" />
+                    <ValidationMessage For="() => model.Title" class="text-danger" />
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group flex-1">
+                        <label class="custom-label">Category</label>
+                        <InputText class="custom-input" @bind-Value="model.Category" placeholder="e.g. Electronics" />
+                        <ValidationMessage For="() => model.Category" class="text-danger" />
+                    </div>
+
+                    <div class="form-group flex-1">
+                        <label class="custom-label">Price</label>
+                        <div class="price-input-wrapper">
+                            <span class="currency-symbol">$</span>
+                            <InputNumber class="custom-input price-input" @bind-Value="model.Price" step="0.01" />
+                        </div>
+                        <ValidationMessage For="() => model.Price" class="text-danger" />
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="custom-label">Description</label>
+                    <InputTextArea class="custom-input textarea" rows="5" @bind-Value="model.Description" placeholder="Describe the condition, features, etc..." />
+                    <ValidationMessage For="() => model.Description" class="text-danger" />
+                </div>
+
+                @if (!string.IsNullOrWhiteSpace(error))
+                {
+                    <div class="error-box" style="margin-bottom: 20px;">@error</div>
+                }
+
+                <div class="action-buttons">
+                    <button type="button" class="btn-cancel" @onclick='() => Nav.NavigateTo("/my-listings")'>Cancel</button>
+                    <button type="submit" class="btn-save" disabled="@saving">
+                        @(saving ? "Saving..." : "Save Changes")
+                    </button>
+                </div>
+            </EditForm>
+        }
+    </div>
+</div>
+
+<style>
+    .page-container { min-height: calc(100vh - 80px); background: #f8fafc; padding: 40px 20px; display: flex; justify-content: center; align-items: flex-start; font-family: system-ui, -apple-system, sans-serif; }
+    .edit-card { background: #ffffff; width: 100%; max-width: 650px; border-radius: 24px; padding: 40px; box-shadow: 0 10px 40px rgba(15, 23, 42, 0.06); border: 1px solid #e2e8f0; }
+    
+    .card-header { margin-bottom: 30px; border-bottom: 1px solid #f1f5f9; padding-bottom: 20px; }
+    .card-header h1 { margin: 0 0 8px 0; font-size: 2rem; color: #0f172a; font-weight: 800; }
+    .card-header p { margin: 0; color: #64748b; font-size: 1.05rem; }
+
+    .form-group { margin-bottom: 24px; }
+    .form-row { display: flex; gap: 20px; }
+    .flex-1 { flex: 1; }
+    
+    .custom-label { display: block; font-weight: 700; color: #334155; margin-bottom: 8px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
+    .custom-input { width: 100%; padding: 14px 16px; border: 1px solid #cbd5e1; border-radius: 12px; font-size: 1rem; background: #f8fafc; transition: all 0.2s ease; color: #0f172a; outline: none; }
+    .custom-input:focus { border-color: #ff6600; background: #ffffff; box-shadow: 0 0 0 4px rgba(255, 102, 0, 0.1); }
+    .textarea { resize: vertical; min-height: 120px; }
+    
+    .price-input-wrapper { position: relative; display: flex; align-items: center; }
+    .currency-symbol { position: absolute; left: 16px; color: #64748b; font-weight: 600; font-size: 1.1rem; }
+    .price-input { padding-left: 35px; }
+
+    .action-buttons { display: flex; justify-content: flex-end; gap: 16px; margin-top: 30px; padding-top: 24px; border-top: 1px solid #f1f5f9; }
+    .btn-cancel { background: transparent; color: #475569; border: 1px solid #cbd5e1; padding: 12px 24px; border-radius: 12px; font-weight: 600; font-size: 1rem; cursor: pointer; transition: 0.2s; }
+    .btn-cancel:hover { background: #f1f5f9; color: #0f172a; }
+    .btn-save { background: #ff6600; color: white; border: none; padding: 12px 32px; border-radius: 12px; font-weight: 700; font-size: 1rem; cursor: pointer; transition: 0.2s; box-shadow: 0 4px 12px rgba(255, 102, 0, 0.2); }
+    .btn-save:hover { background: #e65c00; transform: translateY(-2px); box-shadow: 0 6px 16px rgba(255, 102, 0, 0.3); }
+    .btn-save:disabled { background: #fdba74; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    .error-box { background: #fef2f2; border: 1px solid #fca5a5; color: #b91c1c; padding: 16px; border-radius: 12px; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+    .text-danger { color: #dc2626; font-size: 0.85rem; margin-top: 6px; display: block; font-weight: 500; }
+    
+    .loading-state { text-align: center; padding: 40px; color: #64748b; font-weight: 500; font-size: 1.1rem; }
+    .spinner { display: inline-block; animation: spin 1s linear infinite; margin-right: 8px; }
+    
+    @@keyframes spin { 100% { transform: rotate(360deg); } }
+    @@media (max-width: 600px) { .form-row { flex-direction: column; gap: 0; } .edit-card { padding: 24px; } }
+</style>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    [SupplyParameterFromForm]
+    private Product? model { get; set; }
+    
+    private bool isOwner = false;
+    private bool saving = false;
+    private string? error;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Only load from DB if it wasn't supplied by a form post
+        model ??= await Db.Products.FirstOrDefaultAsync(p => p.Id == Id);
+        
+        if (model is null) return;
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        
+        // Fixed: Using FindFirst instead of the extension method to avoid namespace errors
+        var userId = state.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        isOwner = !string.IsNullOrWhiteSpace(userId) && model.OwnerUserId == userId;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (model is null || !isOwner) return;
+
+        saving = true;
+        error = null;
+
+        try
+        {
+            await Db.SaveChangesAsync();
+            Nav.NavigateTo("/my-listings");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

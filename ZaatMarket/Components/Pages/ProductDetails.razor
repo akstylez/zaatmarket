@@ -1,0 +1,473 @@
+﻿@page "/products/{Id:int}"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Components.Authorization
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Models
+@using ZaatMarket.Services
+@using ZaatMarket.Data
+
+@inject ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject EmailSender EmailService
+@inject NavigationManager Nav
+@inject ICartService Cart
+@inject CurrencyStateService CurrencyState
+@implements IDisposable
+
+<PageTitle>@(product?.Title ?? "Loading...") | Z-A-A-T-T</PageTitle>
+
+<div class="product-page-container">
+
+    @if (loading)
+    {
+        <div class="state-container">
+            <div class="spinner-large"></div>
+            <p>Loading product details...</p>
+        </div>
+    }
+    else if (product is null)
+    {
+        <div class="state-container empty-state">
+            <span class="state-icon">🔍</span>
+            <h3>Product not found</h3>
+            <p>This item may have been removed or sold out.</p>
+            <button class="btn-ghost" type="button" @onclick="BackToProducts">← Back to Marketplace</button>
+        </div>
+    }
+    else
+    {
+        <div class="details-grid">
+            <div class="details-left">
+                <div class="image-showcase">
+                    @if (!string.IsNullOrWhiteSpace(product.ImagePath))
+                    {
+                        <img class="main-img" src="@product.ImagePath" alt="@product.Title" loading="lazy" />
+                    }
+                    else
+                    {
+                        <div class="img-fallback">
+                            <span>📷</span>
+                            <p>No image provided</p>
+                        </div>
+                    }
+                </div>
+            </div>
+
+            <div class="details-right">
+                
+                <div class="bread-crumbs">
+                    <span @onclick="BackToProducts" class="crumb-link">Marketplace</span> > 
+                    <span class="crumb-current">@product.Category</span>
+                </div>
+
+                <h1 class="details-title">@product.Title</h1>
+                
+                <div class="price-stock-row">
+                    <div class="details-price">@CurrencyState.FormatPrice(product.Price)</div>
+                    
+                    @if (product.StockQuantity > 0)
+                    {
+                        <div class="stock-badge in-stock">
+                            <span class="status-dot"></span> In Stock (@product.StockQuantity available)
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="stock-badge out-of-stock">
+                            <span class="status-dot"></span> Out of Stock
+                        </div>
+                    }
+                </div>
+
+                <div class="divider"></div>
+
+                <div class="desc-section">
+                    <h3>About this item</h3>
+                    <p class="details-desc">@product.Description</p>
+                </div>
+
+                <div class="action-panel">
+                    <button class="btn-primary cart-btn" type="button" @onclick="AddToCart" disabled="@(product.StockQuantity <= 0)">
+                        @if(product.StockQuantity > 0)
+                        {
+                            <span>🛒 Add to Cart</span>
+                        }
+                        else
+                        {
+                            <span>🚫 Sold Out</span>
+                        }
+                    </button>
+                    
+                    <button class="btn-secondary track-btn" type="button" @onclick='() => Nav.NavigateTo($"/product-tracking/{product.Id}")'>
+                        📍 Track Live Delivery
+                    </button>
+
+                    @if (showCartSuccess)
+                    {
+                        <div class="success-toast fade-in">
+                            ✅ Added to your cart!
+                        </div>
+                    }
+                </div>
+
+                <section class="interaction-panel">
+                    <h3 class="panel-title">💬 Message @sellerDisplayName</h3>
+                    
+                    <div style="margin-bottom: 16px;">
+                        @if (sellerAccountType == "Business")
+                        {
+                            <span style="background: #1e293b; color: #ff6600; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #ff6600;">
+                                🏢 Verified Business Seller
+                            </span>
+                        }
+                        else
+                        {
+                            <span style="background: #f8fafc; color: #64748b; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #cbd5e1;">
+                                👤 Individual Seller
+                            </span>
+                        }
+                    </div>
+
+                    <div class="seller-bio-card">
+                        <span class="bio-icon">ℹ️</span>
+                        <p class="bio-text">"@sellerBio"</p>
+                    </div>
+
+                    @if (!isLoggedIn)
+                    {
+                        <div class="login-prompt">
+                            <p>Please log in to contact the seller securely.</p>
+                            <a href="/Account/Login" class="btn-ghost-small">Log In</a>
+                        </div>
+                    }
+                    else if (userId == product.OwnerUserId)
+                    {
+                        <div class="message-composer" style="text-align: center; padding: 16px; background: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0;">
+                            <p style="margin: 0; color: #64748b; font-weight: 500;">This is your own product listing.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="message-composer">
+                            <a href="/messages?user=@product.OwnerUserId&product=@Uri.EscapeDataString(product.Title)" class="btn-dark" style="text-decoration: none; width: 100%;">
+                                💬 Open Chat with Seller
+                            </a>
+                        </div>
+                    }
+                </section>
+
+                <section class="interaction-panel reviews-panel">
+                    <div class="reviews-header">
+                        <h3 class="panel-title">⭐ Customer Reviews</h3>
+                        @if (reviews.Count > 0)
+                        {
+                            <div class="rating-summary">
+                                <span class="avg-score">@avgRating.ToString("0.0")</span>
+                                <span class="stars-gold">@Stars((int)Math.Round(avgRating))</span>
+                                <span class="review-count">(@reviews.Count reviews)</span>
+                            </div>
+                        }
+                    </div>
+
+                    @if (reviews.Count == 0)
+                    {
+                        <div class="empty-reviews">
+                            <p>No reviews yet. Be the first to review this item!</p>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="reviews-list">
+                            @foreach (var r in reviews.Take(5))
+                            {
+                                <div class="review-item">
+                                    <div class="review-meta">
+                                        <div class="stars-gold small">@Stars(r.Rating)</div>
+                                        <span class="review-date">@r.CreatedAtUtc.ToLocalTime().ToString("MMM dd, yyyy")</span>
+                                    </div>
+                                    <p class="review-text">@r.Comment</p>
+                                </div>
+                            }
+                        </div>
+                    }
+
+                    <div class="add-review-section">
+                        <h4>Write a Review</h4>
+                        @if (!isLoggedIn)
+                        {
+                            <p class="muted">You must be logged in to leave a review.</p>
+                        }
+                        else
+                        {
+                            <div class="review-form">
+                                <div class="rating-selector">
+                                    <label>Rating:</label>
+                                    <input type="range" min="1" max="5" @bind="rating" class="rating-slider" />
+                                    <span class="rating-display">@rating / 5</span>
+                                </div>
+                                <textarea class="textarea modern-input" rows="2" placeholder="What did you think of this product?" @bind="comment"></textarea>
+                                
+                                <div class="composer-actions">
+                                    @if (!string.IsNullOrWhiteSpace(reviewStatus))
+                                    {
+                                        <span class="msg-status success">@reviewStatus</span>
+                                    }
+                                    <button class="btn-dark" type="button" @onclick="SubmitReviewAsync" disabled="@savingReview">
+                                        @(savingReview ? "Posting..." : "Submit Review")
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </section>
+
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .product-page-container { max-width: 1300px; margin: 0 auto; padding: 40px 24px; font-family: system-ui, -apple-system, sans-serif; background: #ffffff; min-height: 80vh; }
+    
+    /* States */
+    .state-container { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 50vh; color: #64748b; }
+    .state-icon { font-size: 3rem; margin-bottom: 16px; }
+    .empty-state h3 { color: #0f172a; font-size: 1.5rem; margin: 0 0 8px 0; }
+    .spinner-large { width: 40px; height: 40px; border: 4px solid #f1f5f9; border-top-color: #ff6600; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px; }
+
+    /* Grid Layout */
+    .details-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: start; }
+    
+    /* Left Column (Sticky Image) */
+    .details-left { position: sticky; top: 40px; }
+    .image-showcase { background: #f8fafc; border-radius: 24px; padding: 20px; display: flex; justify-content: center; align-items: center; min-height: 500px; border: 1px solid #e2e8f0; }
+    .main-img { max-width: 100%; max-height: 600px; object-fit: contain; border-radius: 12px; transition: transform 0.3s ease; }
+    .main-img:hover { transform: scale(1.02); }
+    .img-fallback { text-align: center; color: #94a3b8; }
+    .img-fallback span { font-size: 3rem; display: block; margin-bottom: 10px; }
+
+    /* Right Column (Info) */
+    .bread-crumbs { color: #64748b; font-size: 0.9rem; margin-bottom: 16px; font-weight: 500; }
+    .crumb-link { cursor: pointer; transition: color 0.2s; }
+    .crumb-link:hover { color: #ff6600; text-decoration: underline; }
+    .crumb-current { color: #0f172a; }
+
+    .details-title { font-size: 2.5rem; font-weight: 800; color: #0f172a; margin: 0 0 16px 0; line-height: 1.2; letter-spacing: -0.02em; }
+    
+    .price-stock-row { display: flex; align-items: center; gap: 20px; margin-bottom: 30px; flex-wrap: wrap; }
+    .details-price { font-size: 2.2rem; font-weight: 700; color: #ff6600; }
+    
+    /* Stock Badges */
+    .stock-badge { display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 999px; font-size: 0.95rem; font-weight: 600; }
+    .status-dot { width: 8px; height: 8px; border-radius: 50%; }
+    .in-stock { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+    .in-stock .status-dot { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.2); }
+    .out-of-stock { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    .out-of-stock .status-dot { background: #ef4444; }
+
+    .divider { height: 1px; background: #e2e8f0; margin: 30px 0; }
+
+    .desc-section h3 { margin: 0 0 12px 0; font-size: 1.2rem; color: #0f172a; }
+    .details-desc { font-size: 1.05rem; color: #475569; line-height: 1.7; margin: 0; white-space: pre-line; }
+
+    /* Action Panel */
+    .action-panel { background: #f8fafc; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; margin: 40px 0; display: flex; flex-direction: column; gap: 12px; position: relative; }
+    .btn-primary, .btn-secondary, .btn-dark, .btn-ghost-small { width: 100%; padding: 16px; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; border: none; transition: all 0.2s ease; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    
+    .cart-btn { background: #ff6600; color: white; box-shadow: 0 4px 12px rgba(255, 102, 0, 0.2); }
+    .cart-btn:hover:not(:disabled) { background: #e65c00; transform: translateY(-2px); }
+    .cart-btn:disabled { background: #94a3b8; cursor: not-allowed; box-shadow: none; }
+    
+    .track-btn { background: #ffffff; color: #0f172a; border: 2px solid #e2e8f0; }
+    .track-btn:hover { background: #f1f5f9; border-color: #cbd5e1; }
+    
+    .btn-dark { background: #0f172a; color: white; padding: 12px 24px; width: auto; border-radius: 8px; }
+    .btn-dark:hover:not(:disabled) { background: #1e293b; }
+    .btn-dark:disabled { background: #64748b; cursor: not-allowed; }
+    
+    .btn-ghost-small { background: #e2e8f0; color: #0f172a; text-decoration: none; display: inline-flex; width: auto; padding: 8px 16px; border-radius: 8px; }
+
+    .success-toast { position: absolute; top: -15px; right: 20px; background: #166534; color: white; padding: 8px 16px; border-radius: 999px; font-weight: 600; font-size: 0.9rem; box-shadow: 0 4px 12px rgba(22, 101, 52, 0.2); z-index: 10; }
+    .fade-in { animation: fadeInOut 2.5s ease forwards; }
+
+    @@keyframes fadeInOut { 0% { opacity: 0; transform: translateY(10px); } 15% { opacity: 1; transform: translateY(0); } 85% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(-10px); } }
+    @@keyframes spin { 100% { transform: rotate(360deg); } }
+
+    .interaction-panel { margin-top: 40px; }
+    .panel-title { font-size: 1.3rem; color: #0f172a; margin: 0 0 20px 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; }
+    
+    /* NEW: Seller Bio Styling */
+    .seller-bio-card { background: #f8fafc; border-left: 4px solid #ff6600; padding: 16px; margin-bottom: 20px; border-radius: 0 12px 12px 0; display: flex; gap: 12px; align-items: flex-start; font-style: italic; color: #475569; }
+    .bio-icon { font-style: normal; font-size: 1.2rem; }
+    .bio-text { margin: 0; line-height: 1.5; font-size: 0.95rem; }
+
+    .modern-input { width: 100%; padding: 14px; border: 1px solid #cbd5e1; border-radius: 12px; font-family: inherit; font-size: 1rem; resize: vertical; transition: border-color 0.2s; box-sizing: border-box; }
+    .modern-input:focus { outline: none; border-color: #ff6600; box-shadow: 0 0 0 3px rgba(255,102,0,0.1); }
+    
+    .composer-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+    .msg-status { font-size: 0.9rem; font-weight: 600; color: #059669; }
+
+    .reviews-header { display: flex; justify-content: space-between; align-items: flex-end; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; margin-bottom: 24px; }
+    .reviews-header .panel-title { border: none; padding: 0; margin: 0; }
+    .rating-summary { display: flex; align-items: center; gap: 8px; }
+    .avg-score { font-size: 1.5rem; font-weight: 800; color: #0f172a; }
+    .stars-gold { color: #f59e0b; letter-spacing: 2px; }
+    .stars-gold.small { font-size: 0.9rem; }
+    .review-count { color: #64748b; font-size: 0.9rem; }
+    
+    .reviews-list { display: flex; flex-direction: column; gap: 20px; margin-bottom: 30px; }
+    .review-item { background: #f8fafc; padding: 20px; border-radius: 16px; border: 1px solid #f1f5f9; }
+    .review-meta { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .review-date { color: #94a3b8; font-size: 0.85rem; }
+    .review-text { margin: 0; color: #334155; line-height: 1.5; font-size: 0.95rem; }
+    
+    .add-review-section { background: #f8fafc; padding: 24px; border-radius: 16px; border: 1px solid #e2e8f0; }
+    .add-review-section h4 { margin: 0 0 16px 0; font-size: 1.1rem; }
+    .rating-selector { display: flex; align-items: center; gap: 16px; margin-bottom: 16px; font-weight: 600; }
+    .rating-slider { flex-grow: 1; max-width: 200px; accent-color: #ff6600; }
+
+    @@media (max-width: 900px) {
+        .details-grid { grid-template-columns: 1fr; gap: 30px; }
+        .details-left { position: static; }
+        .image-showcase { min-height: 300px; }
+        .details-title { font-size: 2rem; }
+        .reviews-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    }
+</style>
+
+@code
+{
+    [Parameter] public int Id { get; set; }
+
+    private Product? product;
+    private bool loading = true;
+
+    private bool isLoggedIn;
+    private string? userId;
+
+    private List<Review> reviews = new();
+    private decimal avgRating;
+
+    private string sellerDisplayName = "The Seller";
+    private string sellerBio = "This seller hasn't added a description yet.";
+    private string sellerAccountType = "Individual";
+
+    private int rating = 5;
+    private string comment = "";
+    private bool savingReview;
+    private string? reviewStatus;
+
+    private bool showCartSuccess = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        CurrencyState.OnCurrencyChanged += OnCurrencyStateChanged;
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        isLoggedIn = !string.IsNullOrWhiteSpace(userId);
+
+        product = await Db.Products.FirstOrDefaultAsync(p => p.Id == Id);
+
+        if (product is not null)
+        {
+            var seller = await Db.Users.FindAsync(product.OwnerUserId);
+            if (seller != null)
+            {
+                sellerDisplayName = !string.IsNullOrWhiteSpace(seller.DisplayName) ? seller.DisplayName : (seller.UserName ?? "The Seller");
+                sellerAccountType = seller.AccountType ?? "Individual";
+                
+                if (!string.IsNullOrWhiteSpace(seller.SellerDescription))
+                {
+                    sellerBio = seller.SellerDescription;
+                }
+            }
+
+            reviews = await Db.Reviews
+                .Where(r => r.ProductId == Id)
+                .OrderByDescending(r => r.CreatedAtUtc)
+                .ToListAsync();
+
+            if (reviews.Count > 0)
+                avgRating = (decimal)reviews.Average(r => r.Rating);
+        }
+
+        loading = false;
+    }
+
+    private void OnCurrencyStateChanged()
+    {
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void BackToProducts() => Nav.NavigateTo("/products");
+
+    private async Task AddToCart()
+    {
+        if (product != null && product.StockQuantity > 0)
+        {
+            Cart.AddToCart(product);
+            showCartSuccess = true;
+            await Task.Delay(2500); 
+            showCartSuccess = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SubmitReviewAsync()
+    {
+        reviewStatus = null;
+
+        if (!isLoggedIn)
+        {
+            reviewStatus = "Login first.";
+            return;
+        }
+
+        if (product is null) return;
+
+        if (string.IsNullOrWhiteSpace(comment))
+        {
+            reviewStatus = "Write a comment first.";
+            return;
+        }
+
+        if (rating < 1) rating = 1;
+        if (rating > 5) rating = 5;
+
+        savingReview = true;
+
+        var rev = new Review
+        {
+            ProductId = product.Id,
+            Rating = rating,
+            Comment = comment,
+            CreatedAtUtc = DateTime.UtcNow,
+            UserId = userId!
+        };
+
+        Db.Reviews.Add(rev);
+        await Db.SaveChangesAsync();
+
+        reviews.Insert(0, rev);
+        avgRating = (decimal)reviews.Average(r => r.Rating);
+
+        comment = "";
+        rating = 5;
+        reviewStatus = "Review posted!";
+
+        savingReview = false;
+    }
+
+    private static string Stars(int r) => new string('★', r) + new string('☆', Math.Max(0, 5 - r));
+
+    public void Dispose()
+    {
+        CurrencyState.OnCurrencyChanged -= OnCurrencyStateChanged;
+    }
+}

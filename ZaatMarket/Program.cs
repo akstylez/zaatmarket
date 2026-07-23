@@ -1,0 +1,213 @@
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Components.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.UI.Services;
+using Microsoft.EntityFrameworkCore;
+using ZaatMarket.Components;
+using ZaatMarket.Components.Account;
+using ZaatMarket.Data;
+using ZaatMarket.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+// Database
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
+    ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseSqlite(connectionString));
+builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
+// Razor Components / Blazor
+// === UPDATED: Added AddHubOptions to allow very large audio/video files (50 MB) ===
+builder.Services.AddRazorComponents()
+    .AddInteractiveServerComponents()
+    .AddHubOptions(options =>
+    {
+        options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50 MB limit
+    });
+
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddCascadingAuthenticationState();
+builder.Services.AddAuthorization();
+
+// App services
+builder.Services.AddScoped<ICartService, CartService>();
+builder.Services.AddScoped<IdentityRedirectManager>();
+builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
+
+// === Live Currency Conversion Registration ===
+builder.Services.AddScoped<CurrencyService>();
+// === REAL-TIME PRESENCE REGISTRATION ===
+builder.Services.AddSingleton<PresenceService>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, UserCircuitHandler>();
+builder.Services.AddScoped<CurrencyStateService>(); // <-- Dynamic State Engine Added
+
+// === ZAATT AI LIVE SERVICE REGISTRATION ===
+builder.Services.AddHttpClient<ZaattAiService>();
+
+// SMTP / Email
+builder.Services.Configure<SmtpSettings>(
+    builder.Configuration.GetSection("Smtp"));
+builder.Services.AddTransient<IEmailSender<ApplicationUser>, EmailSender>();
+builder.Services.AddTransient<EmailSender>();
+
+// Paynow
+builder.Services.Configure<PaynowSettings>(
+    builder.Configuration.GetSection("Paynow"));
+builder.Services.AddSingleton<PaynowPaymentStore>();
+builder.Services.AddHttpClient<PaynowService>();
+
+// Identity
+builder.Services.AddIdentityCore<ApplicationUser>(options =>
+{
+    options.SignIn.RequireConfirmedAccount = false;
+    options.SignIn.RequireConfirmedEmail = false;
+    options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+})
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager()
+    .AddDefaultTokenProviders();
+
+// Authentication
+var auth = builder.Services.AddAuthentication(options =>
+{
+    options.DefaultScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultAuthenticateScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultChallengeScheme = IdentityConstants.ApplicationScheme;
+    options.DefaultSignInScheme = IdentityConstants.ExternalScheme;
+});
+
+auth.AddIdentityCookies();
+auth.AddGoogle(options =>
+{
+    options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
+        ?? throw new InvalidOperationException("Google ClientId missing.");
+
+    options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"]
+        ?? throw new InvalidOperationException("Google ClientSecret missing.");
+
+    options.CallbackPath = "/signin-google";
+});
+
+var app = builder.Build();
+
+// HTTP pipeline
+if (app.Environment.IsDevelopment())
+{
+    app.UseMigrationsEndPoint();
+}
+else
+{
+    app.UseExceptionHandler("/Error", createScopeForErrors: true);
+    app.UseHsts();
+}
+
+app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+app.UseHttpsRedirection();
+app.MapStaticAssets();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseAntiforgery();
+
+// Optional logout helper
+app.MapGet("/auth/logout", async (HttpContext http) =>
+{
+    await http.SignOutAsync(IdentityConstants.ApplicationScheme);
+    await http.SignOutAsync(IdentityConstants.ExternalScheme);
+    await http.SignOutAsync(IdentityConstants.TwoFactorRememberMeScheme);
+    await http.SignOutAsync(IdentityConstants.TwoFactorUserIdScheme);
+
+    return Results.Redirect("/");
+});
+
+// Start Paynow payment
+app.MapPost("/api/paynow/start", async (
+    PaynowService paynowService,
+    PaynowStartRequest request) =>
+{
+    if (string.IsNullOrWhiteSpace(request.Email) ||
+        string.IsNullOrWhiteSpace(request.PhoneNumber) ||
+        request.Amount <= 0 ||
+        string.IsNullOrWhiteSpace(request.ItemName))
+    {
+        return Results.BadRequest(new { error = "Invalid payment request." });
+    }
+
+    var reference = $"ZAAT-{DateTime.UtcNow:yyyyMMddHHmmss}-{Random.Shared.Next(1000, 9999)}";
+
+    var result = await paynowService.StartEcoCashPaymentAsync(
+        reference,
+        request.Email.Trim(),
+        request.PhoneNumber.Trim(),
+        request.Amount,
+        request.ItemName.Trim());
+
+    return result.Success
+        ? Results.Ok(result)
+        : Results.BadRequest(result);
+});
+
+// Paynow result callback
+app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore store) =>
+{
+    var form = await request.ReadFormAsync();
+
+    var reference = form["reference"].ToString();
+    var amountText = form["amount"].ToString();
+    var pollUrl = form["pollurl"].ToString();
+    var paynowReference = form["paynowreference"].ToString();
+    var status = form["status"].ToString();
+    var paymentChannel = form["paymentchannel"].ToString();
+    var paymentInstrument = form["paymentinstrument"].ToString();
+
+    decimal.TryParse(amountText, out var amount);
+
+    if (!string.IsNullOrWhiteSpace(reference))
+    {
+        store.UpdateStatus(
+            reference,
+            status,
+            paynowReference,
+            pollUrl,
+            amount,
+            paymentChannel,
+            paymentInstrument);
+    }
+
+    return Results.Ok();
+});
+
+// Checking payment status
+app.MapGet("/api/paynow/status/{reference}", async (string reference, PaynowService paynowService) =>
+{
+    var result = await paynowService.CheckStatusAsync(reference);
+    return result.Found ? Results.Ok(result) : Results.NotFound(result);
+});
+
+// Return URL target
+app.MapGet("/payment-return", (HttpRequest request) =>
+{
+    var reference = request.Query["reference"].ToString();
+    var url = string.IsNullOrWhiteSpace(reference)
+        ? "/checkout"
+        : $"/checkout?reference={Uri.EscapeDataString(reference)}";
+
+    return Results.Redirect(url);
+});
+
+// Blazor app
+app.MapRazorComponents<App>()
+    .AddInteractiveServerRenderMode();
+
+// Identity endpoints
+app.MapAdditionalIdentityEndpoints();
+
+app.Run();
+
+public sealed class PaynowStartRequest
+{
+    public string Email { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string ItemName { get; set; } = string.Empty;
+}

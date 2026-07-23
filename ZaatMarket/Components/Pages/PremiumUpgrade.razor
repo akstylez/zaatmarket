@@ -1,0 +1,367 @@
+﻿@page "/premium"
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject NavigationManager Nav
+@inject PaynowService Paynow
+@rendermode InteractiveServer
+@using System.ComponentModel.DataAnnotations
+@using System.Text.RegularExpressions
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Identity
+@using ZaatMarket.Models
+@using ZaatMarket.Data
+@using ZaatMarket.Services
+@attribute [Authorize]
+
+<PageTitle>Upgrade to Agent | Z-A-A-T-T Premium</PageTitle>
+
+<div class="premium-layout">
+    <div class="premium-container">
+        
+        <header class="premium-header">
+            <div class="badge">Z-A-A-T-T PRO</div>
+            <h1>Become a Premium Agent</h1>
+            <p>Unlock the Premium feel, Premium Map Tracking, and your Personal AI for your operations.</p>
+        </header>
+
+        @if (!string.IsNullOrWhiteSpace(StatusMessage))
+        {
+            <div class="alert @(StatusIsError ? "error-alert" : "success-alert") fade-in">
+                @if (!StatusIsError)
+                {
+                    <h3>Upgrade Successful!</h3>
+                }
+                <p>@StatusMessage</p>
+            </div>
+        }
+
+        <div class="split-view">
+            <div class="features-panel">
+                <div class="feature-item">
+                    <div class="feature-icon">🌐</div>
+                    <div>
+                        <h3>Maps</h3>
+                        <p>Access raw, unfiltered data on marketplace trends, price fluctuations, and active buyer locations.</p>
+                    </div>
+                </div>
+                
+                <div class="feature-item">
+                    <div class="feature-icon">🗺️</div>
+                    <div>
+                        <h3>Premium Map</h3>
+                        <p>Track multiple active couriers simultaneously with live hardware GPS synchronization.</p>
+                    </div>
+                </div>
+
+                <div class="feature-item">
+                    <div class="feature-icon">🧠</div>
+                    <div>
+                        <h3>Personal AI</h3>
+                        <p>An embedded neural assistant that analyzes your dashboard and pushes proactive supply/demand advice.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="payment-panel">
+                <h2>Secure Subscription</h2>
+
+                @if (isAlreadyPremium)
+                {
+                    <div class="active-status">
+                        <span class="status-dot"></span>
+                        Your Agent Subscription is Active
+                    </div>
+                    <button class="btn-dashboard" @onclick='() => Nav.NavigateTo("/agent-dashboard", forceLoad: true)'>Enter Command Center</button>
+                }
+                else
+                {
+                    <div class="plan-tabs">
+                        <button type="button" class="plan-btn @(SelectedPlan == 1 ? "active" : "")" @onclick="() => SelectPlan(1, 5m)">
+                            1 Month<br/><strong>$5</strong>
+                        </button>
+                        <button type="button" class="plan-btn @(SelectedPlan == 6 ? "active" : "")" @onclick="() => SelectPlan(6, 20m)">
+                            6 Months<br/><strong>$20</strong>
+                        </button>
+                        <button type="button" class="plan-btn @(SelectedPlan == 12 ? "active" : "")" @onclick="() => SelectPlan(12, 45m)">
+                            1 Year<br/><strong>$45</strong>
+                        </button>
+                    </div>
+
+                    <div class="price-tag">
+                        <span class="currency">$</span>
+                        <span class="amount">@Total.ToString("0")</span>
+                        <span class="period">/ @(SelectedPlan == 1 ? "month" : SelectedPlan == 6 ? "6 months" : "year")</span>
+                    </div>
+
+                    <div class="payment-tabs-dark">
+                        <button class="tab-btn-dark @(SelectedMethod == "EcoCash" ? "active" : "")" @onclick='() => SelectMethod("EcoCash")' type="button">
+                            📱 EcoCash
+                        </button>
+                        <button class="tab-btn-dark @(SelectedMethod == "Card" ? "active" : "")" @onclick='() => SelectMethod("Card")' type="button">
+                            💳 Mastercard
+                        </button>
+                    </div>
+
+                    <div class="payment-form">
+                        <EditForm Model="PaymentInput" OnValidSubmit="ProcessRealPaymentAsync">
+                            <DataAnnotationsValidator />
+                            <ValidationSummary class="validation-msg" />
+
+                            <div class="form-group">
+                                <label>Display Name</label>
+                                <InputText @bind-Value="PaymentInput.FullName" class="input-dark" placeholder="Your Name" disabled="@IsProcessingPayment" />
+                            </div>
+
+                            <div class="form-group" style="margin-top: 16px;">
+                                <label>Email Address</label>
+                                <InputText @bind-Value="PaymentInput.Email" class="input-dark" placeholder="agent@zaatmarket.com" disabled="@IsProcessingPayment" />
+                            </div>
+
+                            @if (SelectedMethod == "EcoCash")
+                            {
+                                <div class="form-group slide-in" style="margin-top: 16px;">
+                                    <label>EcoCash Phone Number</label>
+                                    <InputText @bind-Value="PaymentInput.PhoneNumber" class="input-dark" placeholder="e.g. 077..." disabled="@IsProcessingPayment" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="secure-notice-dark slide-in" style="margin-top: 16px;">
+                                    <div class="secure-icon">🔒</div>
+                                    <div>
+                                        <strong>Secure Redirect</strong>
+                                        <p>You will be redirected to Paynow to enter your Mastercard details.</p>
+                                    </div>
+                                </div>
+                            }
+
+                            <button type="submit" class="btn-upgrade" disabled="@IsProcessingPayment">
+                                @if (IsProcessingPayment)
+                                {
+                                    <span class="spinner"></span> <span>Processing Test Payment...</span>
+                                }
+                                else if (SelectedMethod == "EcoCash")
+                                {
+                                    <span>Simulate $@Total.ToString("0") via EcoCash</span>
+                                }
+                                else
+                                {
+                                    <span>Simulate Secure Card Payment ➔</span>
+                                }
+                            </button>
+                        </EditForm>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    /* Premium Dark Theme */
+    .premium-layout { min-height: 100vh; background: #020617; color: #f8fafc; font-family: system-ui, sans-serif; padding: 60px 20px; }
+    .premium-container { max-width: 1000px; margin: 0 auto; }
+    
+    .premium-header { text-align: center; margin-bottom: 50px; }
+    .badge { display: inline-block; background: rgba(59, 130, 246, 0.1); color: #60a5fa; border: 1px solid #3b82f6; padding: 6px 12px; border-radius: 999px; font-weight: 700; font-size: 0.85rem; letter-spacing: 1px; margin-bottom: 16px; }
+    .premium-header h1 { font-size: 3rem; font-weight: 800; margin: 0 0 16px 0; background: linear-gradient(to right, #f8fafc, #94a3b8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .premium-header p { font-size: 1.15rem; color: #94a3b8; max-width: 600px; margin: 0 auto; line-height: 1.6; }
+
+    .alert { padding: 16px; border-radius: 12px; margin-bottom: 30px; }
+    .error-alert { background: rgba(153, 27, 27, 0.2); border: 1px solid #7f1d1d; color: #fca5a5; }
+    .success-alert { background: rgba(22, 101, 52, 0.2); border: 1px solid #14532d; color: #86efac; text-align: center; }
+    .success-alert h3 { margin: 0 0 8px 0; }
+    .fade-in { animation: fadeIn 0.5s ease-in; }
+    @@keyframes fadeIn { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+    .split-view { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; align-items: center; }
+    
+    .features-panel { display: flex; flex-direction: column; gap: 30px; }
+    .feature-item { display: flex; gap: 20px; align-items: flex-start; }
+    .feature-icon { font-size: 2rem; background: #0f172a; border: 1px solid #1e293b; width: 60px; height: 60px; display: flex; align-items: center; justify-content: center; border-radius: 16px; flex-shrink: 0; }
+    .feature-item h3 { margin: 0 0 8px 0; font-size: 1.2rem; color: #f8fafc; }
+    .feature-item p { margin: 0; color: #94a3b8; line-height: 1.5; font-size: 0.95rem; }
+
+    .payment-panel { background: #0f172a; border: 1px solid #1e293b; border-radius: 24px; padding: 40px; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); }
+    .payment-panel h2 { margin: 0 0 24px 0; font-size: 1.5rem; text-align: center; border-bottom: 1px solid #1e293b; padding-bottom: 20px; }
+    
+    .price-tag { text-align: center; margin-bottom: 30px; }
+    .currency { font-size: 2rem; color: #94a3b8; vertical-align: top; font-weight: 600; }
+    .amount { font-size: 4rem; font-weight: 800; line-height: 1; color: #f8fafc; }
+    .period { color: #94a3b8; font-weight: 500; }
+
+    .form-group label { display: block; font-weight: 600; color: #cbd5e1; margin-bottom: 8px; font-size: 0.9rem; }
+    .input-dark { width: 100%; padding: 16px; background: #020617; border: 1px solid #334155; border-radius: 12px; color: white; font-size: 1.1rem; transition: border-color 0.2s; box-sizing: border-box; }
+    .input-dark:focus { outline: none; border-color: #3b82f6; }
+    .input-error { border-color: #ef4444; }
+    .validation-msg { color: #ef4444; font-size: 0.85rem; margin-top: 8px; display: block; list-style: none; padding-left: 0; }
+
+    .btn-upgrade { width: 100%; padding: 18px; margin-top: 24px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: white; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: 0.2s; display: flex; justify-content: center; align-items: center; gap: 10px; }
+    .btn-upgrade:hover:not(:disabled) { box-shadow: 0 0 20px rgba(37, 99, 235, 0.4); transform: translateY(-2px); }
+    .btn-upgrade:disabled { background: #334155; cursor: not-allowed; color: #94a3b8; }
+
+    .btn-dashboard { width: 100%; padding: 18px; background: #f8fafc; color: #020617; border: none; border-radius: 12px; font-size: 1.1rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
+    .btn-dashboard:hover { background: #e2e8f0; }
+
+    .active-status { background: rgba(34, 197, 94, 0.1); border: 1px solid #166534; color: #4ade80; padding: 16px; border-radius: 12px; text-align: center; font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 10px; }
+    .status-dot { width: 10px; height: 10px; background: #4ade80; border-radius: 50%; box-shadow: 0 0 10px #4ade80; }
+
+    .spinner { width: 20px; height: 20px; border: 3px solid rgba(255,255,255,0.2); border-top-color: white; border-radius: 50%; animation: spin 1s linear infinite; }
+    @@keyframes spin { to { transform: rotate(360deg); } }
+
+    @@media (max-width: 800px) {
+        .split-view { grid-template-columns: 1fr; }
+        .premium-header h1 { font-size: 2.2rem; }
+    }
+
+    /* Additional Styles Appended for Real Checkout Features */
+    .plan-tabs, .payment-tabs-dark { display: flex; gap: 10px; margin-bottom: 24px; background: #020617; padding: 6px; border-radius: 16px; border: 1px solid #1e293b; }
+    .plan-btn, .tab-btn-dark { flex: 1; padding: 12px; border: none; background: transparent; border-radius: 12px; font-weight: 700; color: #94a3b8; cursor: pointer; transition: 0.2s; text-align: center; line-height: 1.4; }
+    .plan-btn.active, .tab-btn-dark.active { background: #1e293b; color: #f8fafc; box-shadow: 0 4px 12px rgba(0,0,0,0.3); border: 1px solid #334155; }
+    .plan-btn strong { font-size: 1.2rem; color: #f8fafc; }
+    
+    .secure-notice-dark { display: flex; gap: 15px; align-items: center; background: rgba(34, 197, 94, 0.05); border: 1px solid #14532d; padding: 16px; border-radius: 14px; margin-bottom: 20px; color: #4ade80; }
+    .secure-icon { font-size: 1.5rem; }
+    .secure-notice-dark p { margin: 4px 0 0; font-size: 0.9rem; color: #22c55e; }
+    .slide-in { animation: slideDown 0.3s ease-out forwards; }
+    @@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+
+@code {
+    private ApplicationUser? currentUser;
+    private bool isAlreadyPremium = false;
+    
+    private string? StatusMessage;
+    private bool StatusIsError;
+    private bool IsProcessingPayment = false;
+    
+    private int SelectedPlan = 1;
+    private decimal Total = 5m;
+    private string SelectedMethod = "EcoCash";
+
+    private PaymentInputModel PaymentInput { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userPrincipal = authState.User;
+
+        if (userPrincipal.Identity is not null && userPrincipal.Identity.IsAuthenticated)
+        {
+            currentUser = await UserManager.GetUserAsync(userPrincipal);
+            
+            if (currentUser != null)
+            {
+                isAlreadyPremium = currentUser.IsPremiumAgent;
+                PaymentInput.FullName = currentUser.DisplayName ?? "";
+                PaymentInput.Email = currentUser.Email ?? "";
+            }
+        }
+    }
+
+    private void SelectPlan(int months, decimal price)
+    {
+        SelectedPlan = months;
+        Total = price;
+    }
+
+    private void SelectMethod(string method)
+    {
+        SelectedMethod = method;
+        if (method == "Card")
+        {
+            PaymentInput.PhoneNumber = "N/A"; // Bypasses EcoCash validation
+        }
+        else
+        {
+            PaymentInput.PhoneNumber = ""; 
+        }
+    }
+
+    private async Task ProcessRealPaymentAsync()
+    {
+        StatusMessage = null;
+        StatusIsError = false;
+
+        if (currentUser == null)
+        {
+            StatusMessage = "System Error: Could not locate your user profile.";
+            StatusIsError = true;
+            return;
+        }
+
+        // Validate EcoCash formatting if selected
+        if (SelectedMethod == "EcoCash")
+        {
+            var normalizedPhone = NormalizeZimbabwePhone(PaymentInput.PhoneNumber);
+            if (normalizedPhone is null)
+            {
+                StatusMessage = "Enter a valid Zimbabwe EcoCash number.";
+                StatusIsError = true;
+                return;
+            }
+            PaymentInput.PhoneNumber = normalizedPhone;
+        }
+
+        // Trigger UI Spinner
+        IsProcessingPayment = true;
+        StateHasChanged(); 
+
+        try
+        {
+            // === SIMULATION DELAY ===
+            // This fakes a realistic 2.5-second wait to process the payment gateway
+            await Task.Delay(2500);
+
+            // === SIMULATION UPGRADE ===
+            // Immediately update the database so the user becomes a Premium Agent
+            currentUser.IsPremiumAgent = true;
+            await UserManager.UpdateAsync(currentUser);
+
+            // Update UI State
+            isAlreadyPremium = true;
+            StatusIsError = false;
+
+            if (SelectedMethod == "EcoCash")
+            {
+                StatusMessage = $"Payment of ${Total.ToString("0")} via EcoCash simulated successfully! You are now a PRO Agent.";
+            }
+            else
+            {
+                StatusMessage = $"Secure Card payment of ${Total.ToString("0")} simulated successfully! You are now a PRO Agent.";
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Payment simulation failed: {ex.Message}";
+            StatusIsError = true;
+        }
+        finally
+        {
+            // Turn off Spinner
+            IsProcessingPayment = false;
+        }
+    }
+
+    private static string? NormalizeZimbabwePhone(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input) || input == "N/A") return null;
+        var digits = new string(input.Where(char.IsDigit).ToArray());
+        if (digits.StartsWith("263") && digits.Length == 12) return digits;
+        if (digits.StartsWith("07") && digits.Length == 10) return "263" + digits[1..];
+        return null;
+    }
+
+    private sealed class PaymentInputModel
+    {
+        [Required(ErrorMessage = "Name is required.")]
+        public string FullName { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Email is required.")]
+        [EmailAddress(ErrorMessage = "Valid email required.")]
+        public string Email { get; set; } = string.Empty;
+
+        [Required(ErrorMessage = "Required for EcoCash.")]
+        public string PhoneNumber { get; set; } = string.Empty;
+    }
+}

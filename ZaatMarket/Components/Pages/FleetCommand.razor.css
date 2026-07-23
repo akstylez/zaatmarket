@@ -1,0 +1,211 @@
+﻿.fullscreen-loading {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    width: 100vw;
+    background: #020617;
+    color: #3ea6ff;
+    font-family: monospace;
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+}
+
+.spinner {
+    width: 50px;
+    height: 50px;
+    border: 3px solid #1e293b;
+    border-top-color: #3ea6ff;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.fleet-command-wrapper {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    background: #000;
+    overflow: hidden;
+    font-family: "Roboto", "Arial", sans-serif;
+}
+
+#fullscreen-satellite-map {
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.glass-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 30px;
+    box-sizing: border-box;
+}
+
+.overlay-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    pointer-events: auto;
+}
+
+.btn-back {
+    background: rgba(15, 23, 42, 0.8);
+    backdrop-filter: blur(10px);
+    color: white;
+    border: 1px solid #334155;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+    .btn-back:hover {
+        background: #1e293b;
+        border-color: #3ea6ff;
+        color: #3ea6ff;
+    }
+
+.status-badge {
+    background: rgba(22, 101, 52, 0.8);
+    backdrop-filter: blur(10px);
+    border: 1px solid #2ba640;
+    color: #4ade80;
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 0.85rem;
+    letter-spacing: 1px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+}
+
+    .status-badge .dot {
+        width: 8px;
+        height: 8px;
+        background: #4ade80;
+        border-radius: 50%;
+        animation: pulse 1.5s infinite;
+    }
+
+.overlay-controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-end;
+    pointer-events: auto;
+}
+
+.control-panel {
+    background: rgba(15, 23, 42, 0.85);
+    backdrop-filter: blur(12px);
+    border: 1px solid #334155;
+    padding: 24px;
+    border-radius: 12px;
+    width: 300px;
+    color: #f8fafc;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+    .control-panel h2 {
+        margin: 0 0 20px 0;
+        font-size: 1.2rem;
+        border-bottom: 1px solid #334155;
+        padding-bottom: 10px;
+    }
+
+.stat-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 12px;
+    font-size: 0.95rem;
+}
+
+    .stat-row span {
+        color: #94a3b8;
+    }
+
+    .stat-row strong {
+        font-weight: 600;
+    }
+
+        .stat-row strong.good {
+            color: #4ade80;
+        }
+
+@keyframes pulse {
+    0% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+
+    100% {
+        opacity: 1;
+    }
+}
+
+/* Leaflet injects markers directly into the DOM outside Blazor components, so we must use ::deep */
+::deep .premium-agent-marker {
+    position: relative;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+::deep .pro-core {
+    width: 12px;
+    height: 12px;
+    background-color: #fbbf24;
+    border-radius: 50%;
+    z-index: 2;
+    box-shadow: 0 0 12px #fbbf24, 0 0 0 2px white;
+}
+
+::deep .pro-ring {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    background-color: rgba(251, 191, 36, 0.4);
+    border-radius: 50%;
+    z-index: 1;
+    animation: agentPulse 2s infinite ease-out;
+}
+
+@keyframes agentPulse {
+    0% {
+        transform: scale(0.1);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(2.0);
+        opacity: 0;
+    }
+}

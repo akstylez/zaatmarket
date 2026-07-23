@@ -1,0 +1,268 @@
+﻿@inherits LayoutComponentBase
+@inject NavigationManager NavManager
+@inject ZaatMarket.Services.ICartService Cart
+@inject ZaatMarket.Services.CurrencyStateService CurrencyState
+@implements IDisposable
+
+<div id="progress-bar" class="@progressBarClass"></div>
+
+<div class="page-transition">
+    
+    
+
+    <NavMenu />
+
+    <main class="main-content">
+        @Body
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-grid">
+            <div class="footer-col" style="grid-column: span 2;">
+                <div class="footer-brand">Z-A-A-T-T</div>
+                <p style="color: #888; line-height: 1.6; max-width: 300px;">
+                    The premium local marketplace designed for speed, safety, and modern trading. Buy, sell, and connect with your community.
+                </p>
+            </div>
+
+            <div class="footer-col">
+                <h4>Marketplace</h4>
+                <ul>
+                    <li><a href="/products">All Products</a></li>
+                    <li><a href="/categories">Categories</a></li>
+                    <li><a href="/sell">Sell an Item</a></li>
+                    <li><a href="/stores">Local Stores</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col">
+                <h4>Account</h4>
+                <ul>
+                    <li><a href="/login">Login / Register</a></li>
+                    <li><a href="/my-listings">My Listings</a></li>
+                    <li><a href="/messages">Messages</a></li>
+                    <li><a href="/account">Settings</a></li>
+                </ul>
+            </div>
+
+            <div class="footer-col">
+                <h4>Support</h4>
+                <ul>
+                    <li><a href="/help">Help Center</a></li>
+                    <li><a href="/safety">Trust & Safety</a></li>
+                    <li><a href="/terms">Terms of Service</a></li>
+                    <li><a href="/privacy">Privacy Policy</a></li>
+                </ul>
+            </div>
+        </div>
+        
+        <div class="footer-bottom">
+            &copy; @DateTime.Now.Year ZAATT Marketplace. All rights reserved.      Chemhanza High School
+        </div>
+    </footer>
+</div>
+
+<style>
+    /* --- Global Layout Styles --- */
+    html, body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f8fafc;
+    }
+
+    .page-transition {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .main-content {
+        flex: 1; /* Pushes the footer to the bottom if content is short */
+    }
+
+    /* --- Currency Utility Bar --- */
+    .top-utility-bar {
+        display: flex;
+        justify-content: flex-end;
+        background-color: #0f172a;
+        padding: 6px 20px;
+    }
+
+    .utility-inner {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .utility-text {
+        color: #94a3b8;
+        font-size: 0.8rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .currency-selector {
+        padding: 4px 8px;
+        border-radius: 6px;
+        border: 1px solid #334155;
+        background-color: #1e293b;
+        font-weight: 600;
+        font-size: 0.85rem;
+        color: #f8fafc;
+        cursor: pointer;
+        outline: none;
+        transition: 0.2s;
+    }
+    
+    .currency-selector:focus {
+        border-color: #ff6600;
+    }
+
+    .rate-spinner {
+        font-size: 0.9rem;
+        animation: pulse 1s infinite ease-in-out;
+    }
+
+    @@keyframes pulse { 
+        0%, 100% { opacity: 0.4; transform: scale(0.9); } 
+        50% { opacity: 1; transform: scale(1.2); } 
+    }
+
+    /* --- Premium Progress Bar --- */
+    #progress-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #ff6600, #ffaa00);
+        z-index: 9999;
+        width: 0%;
+        opacity: 0;
+        transition: width 0s, opacity 0.3s ease;
+    }
+
+    #progress-bar.loading {
+        opacity: 1;
+        width: 70%; /* Shoots to 70% quickly */
+        transition: width 0.4s cubic-bezier(0.1, 0.8, 0.2, 1), opacity 0.1s ease;
+    }
+
+    #progress-bar.finishing {
+        opacity: 1;
+        width: 100%;
+        transition: width 0.2s ease-out;
+    }
+
+    /* --- Global Footer Styles --- */
+    .site-footer {
+        background-color: #0f172a;
+        color: #94a3b8;
+        padding: 60px 20px 20px 20px;
+        margin-top: 60px;
+    }
+
+    .footer-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 40px;
+        max-width: 1200px;
+        margin: 0 auto;
+        border-bottom: 1px solid #1e293b;
+        padding-bottom: 40px;
+    }
+
+    .footer-brand {
+        font-size: 1.8rem;
+        font-weight: 900;
+        color: white;
+        margin-bottom: 15px;
+        letter-spacing: 1px;
+    }
+
+    .footer-col h4 {
+        color: white;
+        margin-bottom: 20px;
+        font-size: 1.1rem;
+    }
+
+    .footer-col ul {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+    .footer-col ul li {
+        margin-bottom: 10px;
+    }
+
+    .footer-col ul li a {
+        color: #94a3b8;
+        text-decoration: none;
+        transition: color 0.2s;
+    }
+
+    .footer-col ul li a:hover {
+        color: #ff6600;
+    }
+
+    .footer-bottom {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding-top: 20px;
+        text-align: center;
+        font-size: 0.9rem;
+        color: #64748b;
+    }
+</style>
+
+@code {
+    private string progressBarClass = "";
+
+    protected override void OnInitialized()
+    {
+        // Hook into Blazor's navigation events
+        NavManager.LocationChanged += OnLocationChanged;
+        
+        // Listen for global currency changes to ensure the dropdown stays in sync
+        CurrencyState.OnCurrencyChanged += StateHasChanged;
+    }
+
+    // Fixed: Now an async Task that uses the CurrencyState service
+    private async Task ChangeCurrency(ChangeEventArgs e)
+    {
+        if (e.Value is string newCurrency)
+        {
+            await CurrencyState.UpdateCurrencyAsync(newCurrency);
+        }
+    }
+
+    private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        // 1. Start loading (bar shoots to 70%)
+        progressBarClass = "loading";
+        InvokeAsync(StateHasChanged);
+
+        // Simulate network/render time
+        await Task.Delay(250);
+
+        // 2. Finish loading (bar completes to 100%)
+        progressBarClass = "finishing";
+        await InvokeAsync(StateHasChanged);
+
+        // Wait for the CSS transition to complete
+        await Task.Delay(200);
+
+        // 3. Reset the bar so it's ready for the next click
+        progressBarClass = "";
+        await InvokeAsync(StateHasChanged);
+    }
+
+    public void Dispose()
+    {
+        // Always unsubscribe from events to prevent memory leaks in Blazor
+        NavManager.LocationChanged -= OnLocationChanged;
+        CurrencyState.OnCurrencyChanged -= StateHasChanged;
+    }
+}

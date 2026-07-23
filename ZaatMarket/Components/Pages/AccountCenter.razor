@@ -1,0 +1,1376 @@
+﻿@page "/account"
+@rendermode InteractiveServer
+
+@using System.IO
+@using System.Security.Claims
+@using System.ComponentModel.DataAnnotations
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Forms
+@using Microsoft.AspNetCore.Hosting
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Data
+@using ZaatMarket.Models
+@attribute [Authorize]
+
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
+@inject ApplicationDbContext Db
+@inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+@inject IJSRuntime JSRuntime
+
+<PageTitle>Account Center - ZaatMarket</PageTitle>
+
+<div class="account-page">
+    <div class="account-shell">
+
+        <aside class="account-sidebar">
+            <div class="brand-box">
+                @if (!string.IsNullOrWhiteSpace(profilePicUrl))
+                {
+                    <img src="@profilePicUrl" alt="Profile" class="brand-avatar" />
+                }
+                else
+                {
+                    <div class="brand-icon">@displayName.Substring(0, 1).ToUpper()</div>
+                }
+                <div class="brand-info">
+                    <h2>Account Center</h2>
+                    <div style="margin-top: 4px;">
+                        @if (accountType == "Business")
+                        {
+                            <span class="sidebar-badge business-badge">🏢 Business</span>
+                        }
+                        else
+                        {
+                            <span class="sidebar-badge ind-badge">👤 Individual</span>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <nav class="side-nav">
+                <button class="nav-btn @(activeTab == "Dashboard" ? "active" : "")" @onclick='() => SwitchTab("Dashboard")'>
+                    <span class="nav-icon">📊</span> Dashboard
+                </button>
+                
+                <button class="nav-btn @(activeTab == "Settings" ? "active" : "")" @onclick='() => SwitchTab("Settings")'>
+                    <span class="nav-icon">⚙️</span> Settings & Profile
+                </button>
+
+                <button class="nav-btn @(activeTab == "About" ? "active" : "")" @onclick='() => SwitchTab("About")'>
+                    <span class="nav-icon">💭</span> Bio & About
+                </button>
+                
+                <hr class="nav-divider" />
+                
+                <a href="/my-listings" class="nav-link"><span class="nav-icon">📦</span> My Listings</a>
+                <a href="/sell" class="nav-link"><span class="nav-icon">➕</span> Add Product</a>
+                <a href="/products" class="nav-link"><span class="nav-icon">🛍️</span> Browse Products</a>
+                <a href="/cart" class="nav-link"><span class="nav-icon">🛒</span> My Cart</a>
+                
+                <a href="/messages" class="nav-link nav-link-flex">
+                    <span><span class="nav-icon">💬</span> Messages</span>
+                    @if (hasUnreadMessages)
+                    {
+                        <span class="notification-dot"></span>
+                    }
+                </a>
+
+                <a href="/product-tracking" class="nav-link premium-link">📍 Live Tracker / Maps</a>
+                
+                @if (currentUser != null && currentUser.IsPremiumAgent)
+                {
+                    <a href="/agent-dashboard" class="nav-link agent-link">⚡ Agent Dashboard</a>
+                }
+                else
+                {
+                    <a href="/premium" class="nav-link upgrade-link">⭐ Upgrade to Pro</a>
+                }
+            </nav>
+
+            <div class="side-section">
+                <form method="post" action="/Account/Logout">
+                    <AntiforgeryToken />
+                    <input type="hidden" name="returnUrl" value="Account/Login" />
+                    <button type="submit" class="danger-btn">Log Out Securely</button>
+                </form>
+            </div>
+        </aside>
+
+        <main class="account-main">
+            
+            @if (activeTab == "Dashboard")
+            {
+                <div class="tab-fade-in dashboard-grid">
+                    <section class="hero-card full-width">
+                        <div class="hero-left">
+                            <span class="hero-badge">Overview</span>
+                            <div class="hero-title-row">
+                                <h1>Welcome, @displayName</h1>
+                                
+                                @if (accountType == "Business")
+                                {
+                                    <div class="account-type-pill business-pill">🏢 Verified Business</div>
+                                }
+                                else
+                                {
+                                    <div class="account-type-pill ind-pill">👤 Individual Account</div>
+                                }
+
+                                @if (currentUser != null && currentUser.IsPremiumAgent)
+                                {
+                                    <div class="pro-agent-badge">
+                                        <span class="pulse-dot"></span> ZAAT PRO
+                                    </div>
+                                }
+                            </div>
+                            <p class="hero-text">Keep track of your listings, reviews, messages, and shopping activity from one place.</p>
+
+                            <div class="user-meta">
+                                <div class="meta-chip">
+                                    <span class="meta-label">Location</span>
+                                    <span class="meta-value">@(string.IsNullOrWhiteSpace(location) ? "Not set" : location)</span>
+                                </div>
+                                <div class="meta-chip">
+                                    <span class="meta-label">Language</span>
+                                    <span class="meta-value">@languageDisplay</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="quick-grid full-width">
+                        <div class="quick-card" @onclick="GoToListings">
+                            <div class="quick-icon">📦</div>
+                            <h3>My Listings</h3>
+                            <p>Manage your products</p>
+                        </div>
+                        <div class="quick-card" @onclick="GoToAddProduct">
+                            <div class="quick-icon">➕</div>
+                            <h3>Sell Product</h3>
+                            <p>Add a new item</p>
+                        </div>
+                        <div class="quick-card" @onclick="GoToProducts">
+                            <div class="quick-icon">🛍️</div>
+                            <h3>Browse</h3>
+                            <p>Explore marketplace</p>
+                        </div>
+                        <div class="quick-card tracker-card" @onclick="GoToTracker">
+                            <div class="quick-icon">🗺️</div>
+                            <h3>Tracker</h3>
+                            <p>Live GPS telemetry</p>
+                        </div>
+                    </section>
+
+                    <section class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3><span class="icon">💬</span> Message Center</h3>
+                            <button class="text-link" @onclick="GoToMessages">View All</button>
+                        </div>
+                        <div class="panel-content">
+                            @if (recentMessages.Any())
+                            {
+                                <div class="message-list">
+                                    @foreach (var msg in recentMessages)
+                                    {
+                                        <div class="message-item @(!msg.IsRead ? "unread" : "")" @onclick="GoToMessages">
+                                            <div class="msg-avatar">👤</div>
+                                            <div class="msg-details">
+                                                <div class="msg-top">
+                                                    <span class="msg-sender">Buyer Inquiry</span>
+                                                    <span class="msg-time">@msg.SentAtUtc.ToLocalTime().ToString("MMM dd, HH:mm")</span>
+                                                </div>
+                                                <p class="msg-preview">@msg.Content</p>
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <div class="empty-icon">📭</div>
+                                    <p>Your inbox is empty.</p>
+                                </div>
+                            }
+                        </div>
+                    </section>
+
+                    <section class="dashboard-panel">
+                        <div class="panel-header">
+                            <h3><span class="icon">🏷️</span> Recent Listings</h3>
+                            <button class="text-link" @onclick="GoToListings">Manage</button>
+                        </div>
+                        <div class="panel-content">
+                            @if (recentListings.Any())
+                            {
+                                <div class="listing-list">
+                                    @foreach (var item in recentListings)
+                                    {
+                                        <div class="listing-item" @onclick="GoToListings">
+                                            @if (!string.IsNullOrWhiteSpace(item.ImagePath))
+                                            {
+                                                <img src="@item.ImagePath" class="listing-img" />
+                                            }
+                                            else
+                                            {
+                                                <div class="listing-img-placeholder">📦</div>
+                                            }
+                                            <div class="listing-details">
+                                                <h4>@item.Title</h4>
+                                                <span class="listing-price">@item.Price.ToString("C2")</span>
+                                            </div>
+                                            <span class="listing-status">Active</span>
+                                        </div>
+                                    }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="empty-state">
+                                    <div class="empty-icon">🏬</div>
+                                    <p>You haven't listed any products yet.</p>
+                                    <button class="btn-small" @onclick="GoToAddProduct">Create Listing</button>
+                                </div>
+                            }
+                        </div>
+                    </section>
+                </div>
+            }
+
+            @if (activeTab == "Settings")
+            {
+                <div class="tab-fade-in settings-panel">
+                    <div class="settings-header">
+                        <div>
+                            <h1>Account Settings</h1>
+                            <p>Update your personal information, avatar, and preferences.</p>
+                        </div>
+                        @if (updateSuccess)
+                        {
+                            <div class="success-pill">✅ Settings Saved</div>
+                        }
+                    </div>
+
+                    <EditForm Model="Input" OnValidSubmit="SaveProfile" FormName="profile-settings">
+                        <DataAnnotationsValidator />
+
+                        <div class="settings-section">
+                            <div class="section-info">
+                                <h3>Profile Picture</h3>
+                                <p>Upload an avatar so buyers know who they are dealing with.</p>
+                            </div>
+                            <div class="section-content flex-row">
+                                <div class="avatar-preview-wrap">
+                                    @if (!string.IsNullOrWhiteSpace(Input.ProfilePictureUrl))
+                                    {
+                                        <img src="@Input.ProfilePictureUrl" alt="Avatar Preview" class="avatar-preview" />
+                                    }
+                                    else
+                                    {
+                                        <div class="avatar-placeholder">👤</div>
+                                    }
+                                </div>
+                                <div class="upload-controls">
+                                    <InputFile OnChange="HandleFileSelected" accept="image/*" class="file-input" id="avatarUpload" />
+                                    <label for="avatarUpload" class="btn-outline">Choose Image</label>
+                                    @if (isUploading)
+                                    {
+                                        <span class="uploading-text">Uploading...</span>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <div class="section-info">
+                                <h3>Public Profile</h3>
+                                <p>This information will be displayed publicly on your seller profile.</p>
+                            </div>
+                            <div class="section-content">
+                                <div class="form-group">
+                                    <label class="form-label">Display Name / Username</label>
+                                    <InputText @bind-Value="Input.DisplayName" class="form-control" placeholder="e.g. AwesomeSeller99" />
+                                    <ValidationMessage For="() => Input.DisplayName" class="validation-msg" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Location (City, Country)</label>
+                                    <InputText @bind-Value="Input.Location" class="form-control" placeholder="e.g. Harare, Zimbabwe" />
+                                </div>
+                                <div class="form-group" style="margin-top: 10px;">
+                                    <label class="form-label">Account Type <span class="badge-readonly">Read Only</span></label>
+                                    <input type="text" value="@accountType" class="form-control read-only" disabled />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section">
+                            <div class="section-info">
+                                <h3>Marketplace Language</h3>
+                                <p>Select your language. The entire marketplace will automatically translate for you.</p>
+                            </div>
+                            <div class="section-content">
+                                <div class="form-group">
+                                    <label class="form-label">Preferred Language</label>
+                                    <InputSelect @bind-Value="Input.PreferredLanguageCode" class="form-control">
+                                        <option value="en">English (Default)</option>
+                                        <option value="sn">Shona (Chishona)</option>
+                                        <option value="zh-CN">Chinese (Simplified)</option>
+                                        <option value="zu">Zulu (Ndebele Fallback)</option>
+                                    </InputSelect>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-section no-border">
+                            <div class="section-info">
+                                <h3>Contact Information</h3>
+                            </div>
+                            <div class="section-content">
+                                <div class="form-group">
+                                    <label class="form-label">Phone Number</label>
+                                    <InputText @bind-Value="Input.PhoneNumber" class="form-control" placeholder="+263..." />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Email Address <span class="badge-readonly">Read Only</span></label>
+                                    <input type="text" value="@email" class="form-control read-only" disabled />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button type="button" class="btn-ghost" @onclick='() => SwitchTab("Dashboard")'>Cancel</button>
+                            <button type="submit" class="btn-primary" disabled="@isSaving">
+                                @(isSaving ? "Saving..." : "Save All Changes")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+
+            @if (activeTab == "About")
+            {
+                <div class="tab-fade-in settings-panel">
+                    <div class="settings-header">
+                        <div>
+                            <h1>Seller Bio</h1>
+                            <p>Manage how buyers know you and your public information.</p>
+                        </div>
+                        @if (updateSuccess)
+                        {
+                            <div class="success-pill">✅ Description Saved</div>
+                        }
+                    </div>
+
+                    <EditForm Model="Input" OnValidSubmit="SaveProfile" FormName="security-settings">
+                        <DataAnnotationsValidator />
+
+                        <div class="settings-section no-border">
+                            <div class="section-info">
+                                <h3>Seller Description</h3>
+                                <p>This bio will appear directly above your chat box when buyers message you. Tell them your working hours, return policy, or a little bit about your business to build trust.</p>
+                            </div>
+                            <div class="section-content">
+                                <div class="form-group">
+                                    <label class="form-label">Your Public Bio</label>
+                                    <InputTextArea @bind-Value="Input.SellerDescription" class="form-control textarea-tall" placeholder="e.g. Hi! I usually reply within 10 minutes. I offer a 7-day return policy on all electronics..." />
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="settings-actions">
+                            <button type="button" class="btn-ghost" @onclick='() => SwitchTab("Dashboard")'>Cancel</button>
+                            <button type="submit" class="btn-primary" disabled="@isSaving">
+                                @(isSaving ? "Saving..." : "Save Bio Settings")
+                            </button>
+                        </div>
+                    </EditForm>
+                </div>
+            }
+        </main>
+    </div>
+</div>
+
+<style>
+    /* ==========================================================================
+       VARIABLES & BASE SETUP
+       ========================================================================== */
+    :root {
+        --bg-color: #f8fafc;
+        --card-bg: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --primary: #0f172a;
+        --primary-hover: #1e293b;
+        --accent: #ff6600;
+        --accent-hover: #e65c00;
+        --danger: #ef4444;
+        --radius: 16px;
+        --shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+    }
+
+    .account-page {
+        min-height: 100vh;
+        background: var(--bg-color);
+        padding: 32px 24px;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .account-shell {
+        max-width: 1400px;
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 32px;
+        align-items: start;
+    }
+
+    /* ==========================================================================
+       SIDEBAR NAVIGATION
+       ========================================================================== */
+    .account-sidebar {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 24px;
+        box-shadow: var(--shadow);
+        position: sticky;
+        top: 24px;
+        display: flex;
+        flex-direction: column;
+        height: calc(100vh - 48px);
+    }
+
+    .brand-box {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .brand-icon {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        background: var(--primary);
+        color: white;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.5rem;
+        font-weight: bold;
+        flex-shrink: 0;
+    }
+
+    .brand-avatar {
+        width: 50px;
+        height: 50px;
+        border-radius: 12px;
+        object-fit: cover;
+        border: 2px solid var(--border-color);
+        flex-shrink: 0;
+    }
+
+    .brand-info h2 {
+        margin: 0 0 4px 0;
+        font-size: 1.15rem;
+        color: var(--text-main);
+        font-weight: 700;
+    }
+
+    .sidebar-badge {
+        font-size: 0.7rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 6px;
+        display: inline-block;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .business-badge { background: #fff7ed; color: #ff6600; border: 1px solid #fed7aa; }
+    .ind-badge { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+    .side-nav {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        overflow-y: auto;
+    }
+
+    .nav-btn, .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: none;
+        background: transparent;
+        color: var(--text-muted);
+        font-weight: 600;
+        font-size: 0.95rem;
+        text-decoration: none;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        text-align: left;
+    }
+
+    .nav-link-flex {
+        justify-content: space-between;
+    }
+
+    .nav-btn:hover, .nav-link:hover {
+        background: #f1f5f9;
+        color: var(--text-main);
+    }
+
+    .nav-btn.active {
+        background: var(--primary);
+        color: white;
+    }
+
+    .nav-icon {
+        font-size: 1.1rem;
+    }
+
+    .nav-divider {
+        border: none;
+        border-top: 1px solid var(--border-color);
+        margin: 8px 0;
+    }
+
+    .notification-dot {
+        width: 8px;
+        height: 8px;
+        background-color: var(--danger);
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px #fee2e2;
+    }
+
+    .premium-link { color: #2563eb; background: #eff6ff; }
+    .agent-link { color: #d97706; background: #fef3c7; }
+    .upgrade-link { color: #d97706; border: 1px dashed #fcd34d; }
+
+    .side-section {
+        margin-top: auto;
+        padding-top: 24px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .danger-btn {
+        width: 100%;
+        padding: 12px;
+        border-radius: 10px;
+        border: none;
+        background: #fef2f2;
+        color: var(--danger);
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .danger-btn:hover {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+    /* ==========================================================================
+       DASHBOARD MAIN AREA
+       ========================================================================== */
+    .account-main {
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .dashboard-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 24px;
+    }
+
+    .full-width {
+        grid-column: 1 / -1;
+    }
+
+    .hero-card, .dashboard-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 32px;
+        box-shadow: var(--shadow);
+    }
+
+    .hero-badge {
+        display: inline-block;
+        background: #f1f5f9;
+        color: var(--text-muted);
+        border-radius: 6px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 16px;
+    }
+
+    .hero-title-row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: wrap;
+        margin-bottom: 12px;
+    }
+
+    .hero-title-row h1 {
+        margin: 0;
+        font-size: 2.2rem;
+        color: var(--text-main);
+        font-weight: 800;
+    }
+
+    .account-type-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.8rem;
+        border: 1px solid transparent;
+    }
+    
+    .business-pill { background: #fff7ed; color: #ff6600; border-color: #fed7aa; }
+    .ind-pill { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+
+    .pro-agent-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        background: var(--primary);
+        color: #fbbf24;
+        padding: 6px 12px;
+        border-radius: 999px;
+        font-weight: 700;
+        font-size: 0.75rem;
+    }
+
+    .pulse-dot {
+        width: 6px;
+        height: 6px;
+        background: #fbbf24;
+        border-radius: 50%;
+        animation: pulse 2s infinite;
+    }
+
+    @@keyframes pulse {
+        0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
+        70% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+    }
+
+    .hero-text {
+        color: var(--text-muted);
+        font-size: 1.05rem;
+        max-width: 600px;
+        line-height: 1.6;
+        margin-bottom: 24px;
+    }
+
+    .user-meta {
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+    }
+
+    .meta-chip {
+        background: #f8fafc;
+        border: 1px solid #f1f5f9;
+        border-radius: 12px;
+        padding: 16px 20px;
+        flex: 1;
+        min-width: 200px;
+    }
+
+    .meta-label {
+        display: block;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 4px;
+    }
+
+    .meta-value {
+        color: var(--text-main);
+        font-weight: 700;
+        font-size: 1.1rem;
+    }
+
+    /* Quick Grid Links */
+    .quick-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 20px;
+    }
+
+    .quick-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 16px;
+        padding: 24px;
+        box-shadow: var(--shadow);
+        cursor: pointer;
+        transition: transform 0.2s, box-shadow 0.2s;
+        text-align: center;
+    }
+
+    .quick-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+        border-color: #cbd5e1;
+    }
+
+    .quick-icon {
+        font-size: 2rem;
+        margin-bottom: 12px;
+    }
+
+    .quick-card h3 {
+        margin: 0 0 8px 0;
+        color: var(--text-main);
+        font-size: 1.1rem;
+    }
+
+    .quick-card p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    /* Dashboard Panels (Messages & Listings Preview) */
+    .dashboard-panel {
+        padding: 24px;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .panel-header h3 {
+        margin: 0;
+        font-size: 1.1rem;
+        color: var(--text-main);
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    .text-link {
+        background: transparent;
+        border: none;
+        color: #2563eb;
+        font-weight: 600;
+        cursor: pointer;
+        font-size: 0.9rem;
+    }
+    
+    .text-link:hover { text-decoration: underline; }
+
+    /* Message List CSS */
+    .message-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .message-item {
+        display: flex;
+        gap: 16px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #f8fafc;
+        cursor: pointer;
+        transition: 0.2s;
+        border: 1px solid transparent;
+    }
+
+    .message-item:hover {
+        background: #ffffff;
+        border-color: var(--border-color);
+        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    .message-item.unread {
+        background: #eff6ff;
+        border-left: 3px solid #3b82f6;
+    }
+
+    .msg-avatar {
+        width: 40px;
+        height: 40px;
+        background: #e2e8f0;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .msg-details {
+        flex: 1;
+        overflow: hidden;
+    }
+
+    .msg-top {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 4px;
+    }
+
+    .msg-sender {
+        font-weight: 700;
+        font-size: 0.9rem;
+        color: var(--text-main);
+    }
+
+    .msg-time {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .msg-preview {
+        margin: 0;
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    /* Listings Preview CSS */
+    .listing-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    .listing-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px;
+        border-radius: 12px;
+        background: #ffffff;
+        border: 1px solid var(--border-color);
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .listing-item:hover {
+        background: #f8fafc;
+        border-color: #cbd5e1;
+    }
+
+    .listing-img, .listing-img-placeholder {
+        width: 48px;
+        height: 48px;
+        border-radius: 8px;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .listing-img-placeholder {
+        background: #f1f5f9;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2rem;
+    }
+
+    .listing-details {
+        flex: 1;
+    }
+
+    .listing-details h4 {
+        margin: 0 0 4px 0;
+        font-size: 0.95rem;
+        color: var(--text-main);
+    }
+
+    .listing-price {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--text-muted);
+    }
+
+    .listing-status {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #16a34a;
+        background: #dcfce7;
+        padding: 4px 8px;
+        border-radius: 6px;
+    }
+
+    /* Empty States */
+    .empty-state {
+        text-align: center;
+        padding: 32px 0;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 2.5rem;
+        margin-bottom: 12px;
+        opacity: 0.5;
+    }
+    
+    .btn-small {
+        margin-top: 12px;
+        padding: 8px 16px;
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        background: white;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.2s;
+    }
+
+    .btn-small:hover { background: #f1f5f9; }
+
+    /* ==========================================================================
+       SETTINGS PANEL
+       ========================================================================== */
+    .settings-panel {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: var(--radius);
+        padding: 40px;
+        box-shadow: var(--shadow);
+    }
+
+    .settings-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 40px;
+        padding-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .settings-header h1 {
+        margin: 0 0 8px 0;
+        font-size: 2rem;
+        color: var(--text-main);
+        font-weight: 800;
+    }
+
+    .settings-header p {
+        margin: 0;
+        color: var(--text-muted);
+    }
+
+    .success-pill {
+        background: #dcfce7;
+        color: #166534;
+        padding: 8px 16px;
+        border-radius: 999px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        border: 1px solid #bbf7d0;
+    }
+
+    .settings-section {
+        display: grid;
+        grid-template-columns: 300px 1fr;
+        gap: 40px;
+        padding-bottom: 32px;
+        margin-bottom: 32px;
+        border-bottom: 1px solid var(--border-color);
+    }
+
+    .no-border {
+        border-bottom: none;
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .section-info h3 {
+        margin: 0 0 8px 0;
+        color: var(--text-main);
+        font-size: 1.1rem;
+    }
+
+    .section-info p {
+        margin: 0;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+        line-height: 1.5;
+    }
+
+    .section-content {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .flex-row {
+        flex-direction: row;
+        align-items: center;
+        gap: 32px;
+    }
+
+    /* Forms */
+    .form-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .form-label {
+        font-weight: 600;
+        color: var(--text-main);
+        margin-bottom: 8px;
+        font-size: 0.9rem;
+    }
+
+    .form-control {
+        width: 100%;
+        padding: 12px 16px;
+        border: 1px solid #cbd5e1;
+        border-radius: 10px;
+        font-size: 1rem;
+        background: #ffffff;
+        color: var(--text-main);
+        transition: 0.2s;
+        box-sizing: border-box;
+    }
+
+    .form-control:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
+    }
+
+    .read-only {
+        background: #f8fafc;
+        color: #94a3b8;
+        cursor: not-allowed;
+    }
+
+    .textarea-tall {
+        min-height: 150px;
+        resize: vertical;
+        line-height: 1.5;
+        font-family: inherit;
+    }
+
+    .badge-readonly {
+        background: #f1f5f9;
+        color: var(--text-muted);
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 4px;
+        margin-left: 6px;
+        vertical-align: middle;
+    }
+
+    .validation-msg {
+        color: var(--danger);
+        font-size: 0.85rem;
+        margin-top: 6px;
+    }
+
+    /* Image Upload UI */
+    .avatar-preview-wrap {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        border: 3px solid var(--border-color);
+        overflow: hidden;
+        background: #f8fafc;
+        flex-shrink: 0;
+    }
+
+    .avatar-preview {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .avatar-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #cbd5e1;
+    }
+
+    .file-input { display: none; }
+    
+    .btn-outline {
+        display: inline-block;
+        background: white;
+        color: var(--text-main);
+        border: 1px solid #cbd5e1;
+        padding: 10px 20px;
+        border-radius: 8px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-outline:hover { background: #f8fafc; }
+    
+    .uploading-text {
+        display: block;
+        color: #2563eb;
+        font-size: 0.85rem;
+        font-weight: 600;
+        margin-top: 8px;
+    }
+
+    /* Actions */
+    .settings-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 16px;
+        margin-top: 40px;
+        padding-top: 24px;
+        border-top: 1px solid var(--border-color);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
+    .btn-primary:disabled { background: #fdba74; cursor: not-allowed; }
+
+    .btn-ghost {
+        background: transparent;
+        color: var(--text-muted);
+        border: 1px solid var(--border-color);
+        padding: 12px 24px;
+        border-radius: 10px;
+        font-weight: 600;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-ghost:hover { background: #f1f5f9; color: var(--text-main); }
+
+    /* Animations */
+    .tab-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    @@keyframes fadeIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Responsive */
+    @@media (max-width: 1024px) {
+        .account-shell { grid-template-columns: 240px 1fr; }
+        .dashboard-grid { grid-template-columns: 1fr; }
+    }
+
+    @@media (max-width: 800px) {
+        .account-shell { grid-template-columns: 1fr; }
+        .account-sidebar { position: static; height: auto; }
+        .settings-section { grid-template-columns: 1fr; gap: 16px; }
+        .flex-row { flex-direction: column; align-items: flex-start; }
+    }
+</style>
+
+@code {
+    private string activeTab = "Dashboard";
+    
+    private string displayName = "User";
+    private string email = "Not available";
+    private string userId = "Not available";
+    private string location = "Not set";
+    private string languageDisplay = "English";
+    private string profilePicUrl = "";
+    private string accountType = "Individual"; 
+    private bool hasUnreadMessages = false;
+    
+    private bool updateSuccess = false;
+    private bool isSaving = false;
+    private bool isUploading = false;
+    private ApplicationUser? currentUser;
+    
+    // Lists for Dashboard Previews
+    private List<Message> recentMessages = new();
+    private List<Product> recentListings = new();
+    
+    [SupplyParameterFromForm]
+    private ProfileInputModel Input { get; set; } = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUserData();
+    }
+
+    private void SwitchTab(string tabName)
+    {
+        activeTab = tabName;
+        updateSuccess = false; 
+        
+        if ((tabName == "Settings" || tabName == "About") && currentUser != null)
+        {
+            Input.DisplayName = currentUser.DisplayName ?? "";
+            Input.PhoneNumber = currentUser.PhoneNumber ?? "";
+            Input.Location = currentUser.Location ?? "";
+            Input.PreferredLanguageCode = string.IsNullOrWhiteSpace(currentUser.PreferredLanguage) ? "en" : currentUser.PreferredLanguage;
+            Input.ProfilePictureUrl = currentUser.ProfilePictureUrl ?? "";
+            Input.SellerDescription = currentUser.SellerDescription ?? "";
+        }
+    }
+
+    private async Task LoadUserData()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userPrincipal = authState.User;
+
+        if (userPrincipal.Identity?.IsAuthenticated == true)
+        {
+            userId = userPrincipal.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? "Not available";
+
+            if (userId != "Not available")
+            {
+                currentUser = await Db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                
+             
+                hasUnreadMessages = await Db.Messages.AnyAsync(m => m.ReceiverId == userId && !m.IsRead);
+                
+                recentMessages = await Db.Messages
+                    .Where(m => m.ReceiverId == userId)
+                    .OrderByDescending(m => m.SentAtUtc)
+                    .Take(3)
+                    .ToListAsync();
+                    
+                recentListings = await Db.Products
+                    .Where(p => p.OwnerUserId == userId)
+                    .OrderByDescending(p => p.CreatedAtUtc)
+                    .Take(3)
+                    .ToListAsync();
+
+                if (currentUser != null)
+                {
+                    displayName = !string.IsNullOrWhiteSpace(currentUser.DisplayName) ? currentUser.DisplayName : (currentUser.Email ?? "User");
+                    email = currentUser.Email ?? "Not available";
+                    location = currentUser.Location ?? "Not set";
+                    profilePicUrl = currentUser.ProfilePictureUrl ?? "";
+                    accountType = currentUser.AccountType ?? "Individual"; // gets account type from the database which was in the register page
+                    
+                    languageDisplay = currentUser.PreferredLanguage switch
+                    {
+                        "sn" => "Shona",
+                        "zh-CN" => "Chinese",
+                        "zu" => "Zulu",
+                        _ => "English"
+                    };
+                }
+            }
+        }
+    }
+
+    private async Task HandleFileSelected(InputFileChangeEventArgs e)
+    {
+        isUploading = true;
+        try
+        {
+            var file = e.File;
+            var uploadsFolder = Path.Combine(Env.WebRootPath, "images", "avatars");
+            Directory.CreateDirectory(uploadsFolder);
+            
+            var fileName = $"{userId}_{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+            var filePath = Path.Combine(uploadsFolder, fileName);
+            
+            using var stream = file.OpenReadStream(maxAllowedSize: 20971520);
+            using var fs = new FileStream(filePath, FileMode.Create);
+            await stream.CopyToAsync(fs);
+            
+            Input.ProfilePictureUrl = $"/images/avatars/{fileName}";
+        }
+        finally
+        {
+            isUploading = false;
+        }
+    }
+
+    private async Task SaveProfile()
+    {
+        if (currentUser == null) return;
+        
+        isSaving = true;
+
+        currentUser.DisplayName = Input.DisplayName;
+        currentUser.PhoneNumber = Input.PhoneNumber;
+        currentUser.Location = Input.Location;
+        currentUser.ProfilePictureUrl = Input.ProfilePictureUrl;
+        currentUser.SellerDescription = Input.SellerDescription;
+        
+        bool languageChanged = currentUser.PreferredLanguage != Input.PreferredLanguageCode;
+        currentUser.PreferredLanguage = Input.PreferredLanguageCode;
+
+        var result = await UserManager.UpdateAsync(currentUser);
+
+        if (result.Succeeded)
+        {
+            updateSuccess = true;
+            
+            if (languageChanged)
+            {
+                await JSRuntime.InvokeVoidAsync("setLanguageCookie", Input.PreferredLanguageCode);
+                Nav.NavigateTo(Nav.Uri, forceLoad: true);
+                return;
+            }
+
+            await LoadUserData();
+        }
+        
+        isSaving = false;
+    }
+
+    private void GoToListings() => Nav.NavigateTo("/my-listings");
+    private void GoToAddProduct() => Nav.NavigateTo("/sell");
+    private void GoToProducts() => Nav.NavigateTo("/products");
+    private void GoToMessages() => Nav.NavigateTo("/messages");
+    private void GoToTracker() => Nav.NavigateTo("/product-tracking");
+
+    private sealed class ProfileInputModel
+    {
+        [Required(ErrorMessage = "A Display Name is required.")]
+        public string DisplayName { get; set; } = "";
+        public string PhoneNumber { get; set; } = "";
+        public string Location { get; set; } = "";
+        public string PreferredLanguageCode { get; set; } = "en";
+        public string ProfilePictureUrl { get; set; } = "";
+        public string SellerDescription { get; set; } = "";
+    }
+}

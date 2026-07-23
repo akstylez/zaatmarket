@@ -1,0 +1,22 @@
+﻿@inject NavigationManager Nav
+
+<button type="button"
+        @onclick="Logout"
+        style="width:100%;
+               padding:8px;
+               margin-top:8px;
+               background:#c0392b;
+               color:white;
+               border:none;
+               border-radius:6px;
+               cursor:pointer;">
+    Logout
+</button>
+
+@code {
+    private void Logout()
+    {
+        // forceLoad = true ensures the browser actually hits /auth/logout
+        Nav.NavigateTo("/auth/logout", forceLoad: true);
+    }
+}

@@ -1,0 +1,369 @@
+﻿@page "/my-listings"
+@rendermode InteractiveServer
+@using System.Security.Claims
+@using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Models
+@using Microsoft.AspNetCore.Authorization
+@attribute [Authorize]
+
+@inject ZaatMarket.Data.ApplicationDbContext Db
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>My Listings | ZaatMarket</PageTitle>
+
+<div class="listings-page">
+    <header class="page-header">
+        <div>
+            <h1>My Listings</h1>
+            <p>Manage your active inventory and products.</p>
+        </div>
+        <button class="btn-primary" @onclick='() => Nav.NavigateTo("/sell")'>+ Sell New Item</button>
+    </header>
+
+    @if (items is null)
+    {
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading your inventory...</p>
+        </div>
+    }
+    else if (items.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-icon">📦</div>
+            <h2>You haven't listed anything yet.</h2>
+            <p>Start selling your items to reach thousands of local buyers.</p>
+            <button class="btn-primary mt-3" @onclick='() => Nav.NavigateTo("/sell")'>Create Your First Listing</button>
+        </div>
+    }
+    else
+    {
+        <div class="listings-grid">
+            @foreach (var p in items)
+            {
+                <div class="listing-card">
+                    <div class="card-image-wrap">
+                        @if (!string.IsNullOrWhiteSpace(p.ImagePath))
+                        {
+                            <img src="@p.ImagePath" alt="@p.Title" class="card-image" />
+                        }
+                        else
+                        {
+                            <div class="image-placeholder">🛍️</div>
+                        }
+                        <span class="category-badge">@p.Category</span>
+                    </div>
+
+                    <div class="card-content">
+                        <div class="card-header">
+                            <h3 class="card-title">@p.Title</h3>
+                            <span class="card-price">@p.Price.ToString("C2")</span>
+                        </div>
+                        
+                        <p class="card-desc">@(string.IsNullOrWhiteSpace(p.Description) ? "No description provided." : (p.Description.Length > 60 ? p.Description.Substring(0, 60) + "..." : p.Description))</p>
+                        
+                        <div class="card-footer">
+                            <span class="stock-status @(p.StockQuantity > 0 ? "in-stock" : "out-of-stock")">
+                                @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
+                            </span>
+                            <div class="action-buttons">
+                                <a href="/edit-product/@p.Id" class="btn-outline-primary">Edit</a>
+                                <button @onclick="() => DeleteAsync(p.Id)" class="btn-outline-danger">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .listings-page {
+        padding: 24px;
+        max-width: 1200px;
+        margin: 0 auto;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .page-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 32px;
+        flex-wrap: wrap;
+        gap: 16px;
+    }
+
+    .page-header h1 {
+        margin: 0 0 8px 0;
+        font-size: 2rem;
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    .page-header p {
+        margin: 0;
+        color: #64748b;
+        font-size: 1rem;
+    }
+
+    /* Buttons */
+    .btn-primary {
+        background: #ff6600;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-primary:hover {
+        background: #e65c00;
+        transform: translateY(-2px);
+    }
+
+    .btn-outline-primary {
+        background: transparent;
+        color: #0f172a;
+        border: 1px solid #cbd5e1;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        text-decoration: none;
+        transition: 0.2s;
+    }
+
+    .btn-outline-primary:hover {
+        background: #f8fafc;
+        border-color: #94a3b8;
+    }
+
+    .btn-outline-danger {
+        background: transparent;
+        color: #ef4444;
+        border: 1px solid #fca5a5;
+        padding: 8px 16px;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 0.9rem;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+    .btn-outline-danger:hover {
+        background: #fef2f2;
+        color: #dc2626;
+        border-color: #ef4444;
+    }
+
+    /* Grid Layout */
+    .listings-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 24px;
+    }
+
+    /* Card Styling */
+    .listing-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        overflow: hidden;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        transition: transform 0.2s, box-shadow 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .listing-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
+    }
+
+    .card-image-wrap {
+        height: 200px;
+        background: #f1f5f9;
+        position: relative;
+    }
+
+    .card-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    .image-placeholder {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 3rem;
+        color: #cbd5e1;
+    }
+
+    .category-badge {
+        position: absolute;
+        top: 12px;
+        left: 12px;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(4px);
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .card-content {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+
+    .card-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 8px;
+        gap: 12px;
+    }
+
+    .card-title {
+        margin: 0;
+        font-size: 1.15rem;
+        color: #0f172a;
+        font-weight: 700;
+        line-height: 1.3;
+    }
+
+    .card-price {
+        font-size: 1.15rem;
+        color: #10b981;
+        font-weight: 800;
+    }
+
+    .card-desc {
+        color: #64748b;
+        font-size: 0.9rem;
+        line-height: 1.5;
+        margin-top: 0;
+        margin-bottom: 24px;
+        flex-grow: 1;
+    }
+
+    .card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-top: 1px solid #f1f5f9;
+        padding-top: 16px;
+    }
+
+    .stock-status {
+        font-size: 0.85rem;
+        font-weight: 600;
+    }
+
+    .stock-status.in-stock { color: #10b981; }
+    .stock-status.out-of-stock { color: #ef4444; }
+
+    .action-buttons {
+        display: flex;
+        gap: 8px;
+    }
+
+    /* States */
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: #ffffff;
+        border-radius: 16px;
+        border: 1px dashed #cbd5e1;
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+    }
+
+    .empty-state h2 { color: #0f172a; margin: 0 0 8px 0; }
+    .empty-state p { color: #64748b; margin-bottom: 24px; }
+    .mt-3 { margin-top: 16px; }
+
+    .loading-state {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: 60px;
+        color: #64748b;
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #f1f5f9;
+        border-top: 4px solid #ff6600;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin-bottom: 16px;
+    }
+
+    @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Mobile adjustments */
+    @@media (max-width: 600px) {
+        .listings-page { padding: 16px; }
+        .page-header { flex-direction: column; align-items: flex-start; }
+        .btn-primary { width: 100%; }
+        .card-footer { flex-direction: column; align-items: flex-start; gap: 16px; }
+        .action-buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
+        .btn-outline-primary, .btn-outline-danger { text-align: center; }
+    }
+</style>
+
+@code {
+    private List<Product>? items;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            items = await Db.Products.AsNoTracking()
+                .Where(p => p.OwnerUserId == userId)
+                .OrderByDescending(p => p.CreatedAtUtc)
+                .ToListAsync();
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var item = await Db.Products.FindAsync(id);
+        if (item is null) return;
+
+        var state = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+
+        if (string.IsNullOrWhiteSpace(userId) || item.OwnerUserId != userId)
+            return;
+
+        Db.Products.Remove(item);
+        await Db.SaveChangesAsync();
+
+        // Update the UI immediately by removing the deleted item from the list
+        items = items!.Where(x => x.Id != id).ToList();
+    }
+}
