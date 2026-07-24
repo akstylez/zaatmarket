@@ -17,7 +17,7 @@
 
         <div class="brand-section">
             <button class="hamburger-btn" @onclick="ToggleSidebar">☰</button>
-            
+
             <a class="brand" href="/">
                 <img class="brand-logo" src="/images/logo.png" alt="ZaatMarket logo" />
                 <span class="brand-name mobile-hide">Z-A-A-T-T Marketplace</span>
@@ -25,7 +25,7 @@
         </div>
 
         <div class="nav-right">
-            
+
             <div class="currency-selector-wrapper">
                 <select class="currency-dropdown" value="@CurrencyState.TargetCurrency" @onchange="HandleCurrencySelection" disabled="@CurrencyState.IsLoadingRate">
                     <option value="USD">USD ($)</option>
@@ -48,10 +48,11 @@
                     <span class="cart-badge">@Cart.Items.Count</span>
                 }
             </a>
-            
-            <a class="nav-account" href="/account" style="position: relative; display: flex; align-items: center; gap: 6px;">
+
+            <!-- Fixed path back to /account -->
+            <a class="nav-account" href="/account" data-enhance-nav="false" style="position: relative; display: flex; align-items: center; gap: 6px;">
                 <span class="mobile-hide">Account</span>
-                
+
                 @if (currentUser != null && currentUser.IsPremiumAgent)
                 {
                     <span class="nav-pro-badge">PRO</span>
@@ -74,13 +75,13 @@
         <h3>Menu</h3>
         <button class="close-btn" @onclick="CloseSidebar">✕</button>
     </div>
-    
+
     <div class="sidebar-links">
         <NavLink class="sidebar-link" href="/" Match="NavLinkMatch.All" @onclick="CloseSidebar">Home</NavLink>
-        
+
         <div class="sidebar-category">Explore</div>
         <NavLink class="sidebar-link" href="/products" @onclick="CloseSidebar">All Products</NavLink>
-        
+
         <div class="sidebar-category">Seller Hub</div>
         <NavLink class="sidebar-link" href="/sell" @onclick="CloseSidebar">Sell an Item</NavLink>
         <NavLink class="sidebar-link" href="/my-listings" @onclick="CloseSidebar">My Listings</NavLink>
@@ -88,6 +89,10 @@
         <div class="sidebar-category">Tools & Tracking</div>
         <NavLink class="sidebar-link" href="/product-tracking" @onclick="CloseSidebar">📍 Live Tracker / Maps</NavLink>
         <NavLink class="sidebar-link" href="/zaatt-ai" @onclick="CloseSidebar" style="color: #6366f1; font-weight: bold;">✨ ZAATT AI</NavLink>
+
+        <div class="sidebar-category">Account</div>
+        <!-- Fixed path back to /account -->
+        <a class="sidebar-link" href="/account" data-enhance-nav="false" @onclick="CloseSidebar">👤 Profile & Settings</a>
 
         <div class="sidebar-category">Premium</div>
         @if (currentUser != null && currentUser.IsPremiumAgent)
@@ -106,7 +111,6 @@
 </div>
 
 <style>
-
     .currency-selector-wrapper {
         display: flex;
         align-items: center;
@@ -127,24 +131,31 @@
         transition: all 0.2s ease;
     }
 
-    .currency-dropdown:focus {
-        border-color: #ff6600;
-        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
-    }
+        .currency-dropdown:focus {
+            border-color: #ff6600;
+            box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+        }
 
-    .currency-dropdown:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
+        .currency-dropdown:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
     .rate-spinner {
         font-size: 1.1rem;
         animation: pulse 1s infinite ease-in-out;
     }
 
-    @@keyframes pulse { 
-        0%, 100% { opacity: 0.4; transform: scale(0.9); } 
-        50% { opacity: 1; transform: scale(1.2); } 
+    @@keyframes pulse {
+        0%, 100% {
+            opacity: 0.4;
+            transform: scale(0.9);
+        }
+
+        50% {
+            opacity: 1;
+            transform: scale(1.2);
+        }
     }
 
     .nav-pro-badge {
@@ -181,7 +192,7 @@
         .currency-selector-wrapper {
             margin-right: 5px;
         }
-        
+
         .currency-dropdown {
             padding: 4px 6px;
             font-size: 0.8rem;
@@ -191,12 +202,12 @@
         .mobile-hide {
             display: none !important;
         }
-        
+
         #nav-cart-icon::before {
             content: "🛒";
             font-size: 1.3rem;
         }
-        
+
         .nav-account::before {
             content: "👤";
             font-size: 1.3rem;
@@ -238,7 +249,7 @@
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var user = authState.User;
-        
+
         if (user.Identity?.IsAuthenticated == true)
         {
             var userId = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
