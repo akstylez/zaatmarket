@@ -10,54 +10,66 @@ using ZaatMarket.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Database
+// ==========================================
+// 1. DATABASE CONFIGURATION
+// ==========================================
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(connectionString));
+
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
-// Razor Components / Blazor
-// === UPDATED: Added AddHubOptions to allow very large audio/video files (50 MB) ===
+// ==========================================
+// 2. BLAZOR & SIGNALR (WEB SOCKETS)
+// ==========================================
+// Added AddHubOptions to allow very large audio/video file uploads (50 MB limit)
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddHubOptions(options =>
     {
-        options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50 MB limit
+        options.MaximumReceiveMessageSize = 50 * 1024 * 1024; // 50 MB
     });
 
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
 
-// App services
+// ==========================================
+// 3. APPLICATION & CUSTOM SERVICES
+// ==========================================
 builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-// === Live Currency Conversion Registration ===
+// Currency & Pricing Engines
 builder.Services.AddScoped<CurrencyService>();
-// === REAL-TIME PRESENCE REGISTRATION ===
+builder.Services.AddScoped<CurrencyStateService>();
+
+// Real-Time User Presence Tracker
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, UserCircuitHandler>();
-builder.Services.AddScoped<CurrencyStateService>(); // <-- Dynamic State Engine Added
 
-// === ZAATT AI LIVE SERVICE REGISTRATION ===
+// ZAATT AI Live Service
 builder.Services.AddHttpClient<ZaattAiService>();
 
+// ==========================================
+// 4. EXTERNAL INTEGRATIONS (EMAIL & PAYNOW)
+// ==========================================
 // SMTP / Email
-builder.Services.Configure<SmtpSettings>(
-    builder.Configuration.GetSection("Smtp"));
+builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.AddTransient<IEmailSender<ApplicationUser>, EmailSender>();
 builder.Services.AddTransient<EmailSender>();
 
-// Paynow
-builder.Services.Configure<PaynowSettings>(
-    builder.Configuration.GetSection("Paynow"));
+// Paynow Payment Gateway
+builder.Services.Configure<PaynowSettings>(builder.Configuration.GetSection("Paynow"));
 builder.Services.AddSingleton<PaynowPaymentStore>();
 builder.Services.AddHttpClient<PaynowService>();
 
-// Identity
+// ==========================================
+// 5. IDENTITY & AUTHENTICATION
+// ==========================================
 builder.Services.AddIdentityCore<ApplicationUser>(options =>
 {
     options.SignIn.RequireConfirmedAccount = false;
@@ -68,7 +80,6 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     .AddSignInManager()
     .AddDefaultTokenProviders();
 
-// Authentication
 var auth = builder.Services.AddAuthentication(options =>
 {
     options.DefaultScheme = IdentityConstants.ApplicationScheme;
@@ -78,6 +89,7 @@ var auth = builder.Services.AddAuthentication(options =>
 });
 
 auth.AddIdentityCookies();
+
 auth.AddGoogle(options =>
 {
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
@@ -91,7 +103,9 @@ auth.AddGoogle(options =>
 
 var app = builder.Build();
 
-// HTTP pipeline
+// ==========================================
+// 6. HTTP REQUEST PIPELINE
+// ==========================================
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
@@ -105,10 +119,14 @@ else
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 app.MapStaticAssets();
+
 app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+// ==========================================
+// 7. MINIMAL API ENDPOINTS
+// ==========================================
 // Optional logout helper
 app.MapGet("/auth/logout", async (HttpContext http) =>
 {
@@ -147,7 +165,7 @@ app.MapPost("/api/paynow/start", async (
         : Results.BadRequest(result);
 });
 
-// Paynow result callback
+// Paynow result webhook callback
 app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore store) =>
 {
     var form = await request.ReadFormAsync();
@@ -177,7 +195,7 @@ app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore
     return Results.Ok();
 });
 
-// Checking payment status
+// Check payment status
 app.MapGet("/api/paynow/status/{reference}", async (string reference, PaynowService paynowService) =>
 {
     var result = await paynowService.CheckStatusAsync(reference);
@@ -195,20 +213,23 @@ app.MapGet("/payment-return", (HttpRequest request) =>
     return Results.Redirect(url);
 });
 
-// Blazor app
+// ==========================================
+// 8. BLAZOR & IDENTITY COMPONENT MAPPING
+// ==========================================
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
-// Identity endpoints
 app.MapAdditionalIdentityEndpoints();
 
-// Automatically apply database migrations on startup
+// ==========================================
+// 9. AUTOMATIC DATABASE MIGRATIONS ON STARTUP
+// ==========================================
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
-        var context = services.GetRequiredService<ApplicationDbContext>(); // Replace 'ApplicationDbContext' if your context has a different name
+        var context = services.GetRequiredService<ApplicationDbContext>();
         context.Database.Migrate();
     }
     catch (Exception ex)
@@ -220,6 +241,9 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
+// ==========================================
+// 10. DATA TRANSFER OBJECTS
+// ==========================================
 public sealed class PaynowStartRequest
 {
     public string Email { get; set; } = string.Empty;
