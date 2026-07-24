@@ -7,6 +7,7 @@ using ZaatMarket.Components;
 using ZaatMarket.Components.Account;
 using ZaatMarket.Data;
 using ZaatMarket.Services;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -17,10 +18,11 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(connectionString));
+    options.UseSqlite(connectionString)
+           // This line stops EF Core 9 from blocking migrations on startup:
+           .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
-
 // ==========================================
 // 2. BLAZOR & SIGNALR (WEB SOCKETS)
 // ==========================================
