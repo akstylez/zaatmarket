@@ -9,8 +9,8 @@ public class ApplicationDbContextFactory : IDesignTimeDbContextFactory<Applicati
     {
         var optionsBuilder = new DbContextOptionsBuilder<ApplicationDbContext>();
 
-        // Use the same SQLite file path as appsettings.json
-        optionsBuilder.UseSqlite("Data Source=App_Data/zaatmarket.db");
+        // Use the same PostgreSQL connection string as appsettings.json
+        optionsBuilder.UseNpgsql("Data Source=App_Data/zaatmarket.db");
 
         return new ApplicationDbContext(optionsBuilder.Options);
     }
