@@ -17,11 +17,18 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// CHANGED: AddDbContext -> AddDbContextFactory
+// 1. Keep the Factory for components explicitly requesting IDbContextFactory (like Home.razor)
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
-           // This line stops EF Core 9 from blocking migrations on startup:
            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
+
+// 2. GLOBAL CONCURRENCY FIX: Register ApplicationDbContext as TRANSIENT!
+// This forces every @inject ApplicationDbContext Db across your entire app to receive 
+// its own private, isolated connection so pages never collide with NavMenu or Layouts!
+builder.Services.AddDbContext<ApplicationDbContext>(options =>
+    options.UseNpgsql(connectionString)
+           .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)),
+    ServiceLifetime.Transient);
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 // ==========================================
