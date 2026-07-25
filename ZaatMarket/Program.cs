@@ -17,18 +17,11 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// 1. Keep the Factory for components explicitly requesting IDbContextFactory (like Home.razor)
+// The correct, native way for Blazor Server + EF Core: Register ONLY the factory. 
+// This safely handles both background services and component database creation without DI scope clashes.
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
-
-// 2. GLOBAL CONCURRENCY FIX: Register ApplicationDbContext as TRANSIENT!
-// This forces every @inject ApplicationDbContext Db across your entire app to receive 
-// its own private, isolated connection so pages never collide with NavMenu or Layouts!
-builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseNpgsql(connectionString)
-           .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)),
-    ServiceLifetime.Transient);
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 // ==========================================
