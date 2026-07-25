@@ -33,7 +33,9 @@
                 }
                 else
                 {
-                    <div class="brand-icon">@displayName.Substring(0, 1).ToUpper()</div>
+                    <div class="brand-icon">
+                        @(!string.IsNullOrWhiteSpace(displayName) ? displayName.Substring(0, 1).ToUpper() : "U")
+                    </div>
                 }
                 <div class="brand-info">
                     <h2>Account Center</h2>
@@ -51,15 +53,15 @@
             </div>
 
             <nav class="side-nav">
-                <button class="nav-btn @(activeTab == "Dashboard" ? "active" : "")" @onclick='() => SwitchTab("Dashboard")'>
+                <button type="button" class="nav-btn @(activeTab == "Dashboard" ? "active" : "")" @onclick='() => SwitchTab("Dashboard")'>
                     <span class="nav-icon">📊</span> Dashboard
                 </button>
 
-                <button class="nav-btn @(activeTab == "Settings" ? "active" : "")" @onclick='() => SwitchTab("Settings")'>
+                <button type="button" class="nav-btn @(activeTab == "Settings" ? "active" : "")" @onclick='() => SwitchTab("Settings")'>
                     <span class="nav-icon">⚙️</span> Settings & Profile
                 </button>
 
-                <button class="nav-btn @(activeTab == "About" ? "active" : "")" @onclick='() => SwitchTab("About")'>
+                <button type="button" class="nav-btn @(activeTab == "About" ? "active" : "")" @onclick='() => SwitchTab("About")'>
                     <span class="nav-icon">💭</span> Bio & About
                 </button>
 
@@ -91,7 +93,7 @@
             </nav>
 
             <div class="side-section">
-                <form method="post" action="/Account/Logout">
+                <form method="post" action="/Account/Logout" data-enhance="false">
                     <AntiforgeryToken />
                     <input type="hidden" name="returnUrl" value="Account/Login" />
                     <button type="submit" class="danger-btn">Log Out Securely</button>
@@ -167,7 +169,7 @@
                     <section class="dashboard-panel">
                         <div class="panel-header">
                             <h3><span class="icon">💬</span> Message Center</h3>
-                            <button class="text-link" @onclick="GoToMessages">View All</button>
+                            <button type="button" class="text-link" @onclick="GoToMessages">View All</button>
                         </div>
                         <div class="panel-content">
                             @if (recentMessages.Any())
@@ -201,7 +203,7 @@
                     <section class="dashboard-panel">
                         <div class="panel-header">
                             <h3><span class="icon">🏷️</span> Recent Listings</h3>
-                            <button class="text-link" @onclick="GoToListings">Manage</button>
+                            <button type="button" class="text-link" @onclick="GoToListings">Manage</button>
                         </div>
                         <div class="panel-content">
                             @if (recentListings.Any())
@@ -212,7 +214,7 @@
                                         <div class="listing-item" @onclick="GoToListings">
                                             @if (!string.IsNullOrWhiteSpace(item.ImagePath))
                                             {
-                                                <img src="@item.ImagePath" class="listing-img" />
+                                                <img src="@item.ImagePath" class="listing-img" alt="@item.Title" />
                                             }
                                             else
                                             {
@@ -232,7 +234,7 @@
                                 <div class="empty-state">
                                     <div class="empty-icon">🏬</div>
                                     <p>You haven't listed any products yet.</p>
-                                    <button class="btn-small" @onclick="GoToAddProduct">Create Listing</button>
+                                    <button type="button" class="btn-small" @onclick="GoToAddProduct">Create Listing</button>
                                 </div>
                             }
                         </div>
@@ -791,7 +793,7 @@
         font-size: 0.9rem;
     }
 
-    /* Dashboard Panels (Messages & Listings Preview) */
+    /* Dashboard Panels */
     .dashboard-panel {
         padding: 24px;
         display: flex;
@@ -1306,7 +1308,6 @@
     private bool isUploading = false;
     private ApplicationUser? currentUser;
 
-    // Lists for Dashboard Previews
     private List<Message> recentMessages = new();
     private List<Product> recentListings = new();
 
@@ -1345,24 +1346,23 @@
 
             if (userId != "Not available")
             {
-                // Spawning an isolated database context just for this query block
                 using var db = await DbFactory.CreateDbContextAsync();
 
-                currentUser = await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+                currentUser = await db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == userId);
 
                 hasUnreadMessages = await db.Messages.AnyAsync(m => m.ReceiverId == userId && !m.IsRead);
 
                 recentMessages = await db.Messages
-                                    .Where(m => m.ReceiverId == userId)
-                                    .OrderByDescending(m => m.SentAtUtc)
-                                    .Take(3)
-                                    .ToListAsync();
+                    .Where(m => m.ReceiverId == userId)
+                    .OrderByDescending(m => m.SentAtUtc)
+                    .Take(3)
+                    .ToListAsync();
 
                 recentListings = await db.Products
-                                    .Where(p => p.OwnerUserId == userId)
-                                    .OrderByDescending(p => p.CreatedAtUtc)
-                                    .Take(3)
-                                    .ToListAsync();
+                    .Where(p => p.OwnerUserId == userId)
+                    .OrderByDescending(p => p.CreatedAtUtc)
+                    .Take(3)
+                    .ToListAsync();
 
                 if (currentUser != null)
                 {
@@ -1410,20 +1410,28 @@
 
     private async Task SaveProfile()
     {
-        if (currentUser == null) return;
+        if (userId == "Not available") return;
 
         isSaving = true;
 
-        currentUser.DisplayName = Input.DisplayName;
-        currentUser.PhoneNumber = Input.PhoneNumber;
-        currentUser.Location = Input.Location;
-        currentUser.ProfilePictureUrl = Input.ProfilePictureUrl;
-        currentUser.SellerDescription = Input.SellerDescription;
+        // Fetch a fresh, untracked instance directly via UserManager to avoid entity tracking conflicts
+        var userToUpdate = await UserManager.FindByIdAsync(userId);
+        if (userToUpdate == null)
+        {
+            isSaving = false;
+            return;
+        }
 
-        bool languageChanged = currentUser.PreferredLanguage != Input.PreferredLanguageCode;
-        currentUser.PreferredLanguage = Input.PreferredLanguageCode;
+        userToUpdate.DisplayName = Input.DisplayName;
+        userToUpdate.PhoneNumber = Input.PhoneNumber;
+        userToUpdate.Location = Input.Location;
+        userToUpdate.ProfilePictureUrl = Input.ProfilePictureUrl;
+        userToUpdate.SellerDescription = Input.SellerDescription;
 
-        var result = await UserManager.UpdateAsync(currentUser);
+        bool languageChanged = userToUpdate.PreferredLanguage != Input.PreferredLanguageCode;
+        userToUpdate.PreferredLanguage = Input.PreferredLanguageCode;
+
+        var result = await UserManager.UpdateAsync(userToUpdate);
 
         if (result.Succeeded)
         {

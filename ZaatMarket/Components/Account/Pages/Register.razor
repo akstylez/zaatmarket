@@ -14,7 +14,6 @@
 @inject IEmailSender<ApplicationUser> EmailSender
 @inject ILogger<Register> Logger
 @inject NavigationManager NavigationManager
-@inject IdentityRedirectManager RedirectManager
 
 <PageTitle>Register | ZaatMarket</PageTitle>
 
@@ -32,52 +31,52 @@
             </div>
         }
 
-        <EditForm Model="FormInput" method="post" OnValidSubmit="PromptAccountType" FormName="register">
+        <EditForm Model="FormInput" OnValidSubmit="PromptAccountType" FormName="register">
             <DataAnnotationsValidator />
             <ValidationSummary class="text-danger mb-3" role="alert" />
 
             <div class="form-group">
                 <label class="form-label" for="username">Display Name / Username</label>
-                <InputText id="username" 
-                           @bind-Value="FormInput.Username" 
-                           class="form-control" 
-                           autocomplete="username" 
-                           aria-required="true" 
+                <InputText id="username"
+                           @bind-Value="FormInput.Username"
+                           class="form-control"
+                           autocomplete="username"
+                           aria-required="true"
                            placeholder="johndoe123" />
                 <ValidationMessage For="() => FormInput.Username" class="text-danger" />
             </div>
 
             <div class="form-group">
                 <label class="form-label" for="email">Email</label>
-                <InputText id="email" 
-                           @bind-Value="FormInput.Email" 
-                           class="form-control" 
-                           autocomplete="email" 
-                           aria-required="true" 
+                <InputText id="email"
+                           @bind-Value="FormInput.Email"
+                           class="form-control"
+                           autocomplete="email"
+                           aria-required="true"
                            placeholder="name@example.com" />
                 <ValidationMessage For="() => FormInput.Email" class="text-danger" />
             </div>
 
             <div class="form-group">
                 <label class="form-label" for="password">Password</label>
-                <InputText id="password" 
-                           type="password" 
-                           @bind-Value="FormInput.Password" 
-                           class="form-control" 
-                           autocomplete="new-password" 
-                           aria-required="true" 
+                <InputText id="password"
+                           type="password"
+                           @bind-Value="FormInput.Password"
+                           class="form-control"
+                           autocomplete="new-password"
+                           aria-required="true"
                            placeholder="Create a strong password" />
                 <ValidationMessage For="() => FormInput.Password" class="text-danger" />
             </div>
 
             <div class="form-group">
                 <label class="form-label" for="confirm-password">Confirm Password</label>
-                <InputText id="confirm-password" 
-                           type="password" 
-                           @bind-Value="FormInput.ConfirmPassword" 
-                           class="form-control" 
-                           autocomplete="new-password" 
-                           aria-required="true" 
+                <InputText id="confirm-password"
+                           type="password"
+                           @bind-Value="FormInput.ConfirmPassword"
+                           class="form-control"
+                           autocomplete="new-password"
+                           aria-required="true"
                            placeholder="Repeat your password" />
                 <ValidationMessage For="() => FormInput.ConfirmPassword" class="text-danger" />
             </div>
@@ -88,7 +87,7 @@
                 </button>
             </div>
         </EditForm>
-        
+
         <div class="auth-links">
             Already have an account? <a href="/Account/Login">Log in</a>
         </div>
@@ -103,7 +102,7 @@
             {
                 <h2 class="modal-title">Account Type</h2>
                 <p class="modal-subtitle">How will you be using ZaatMarket?</p>
-                
+
                 <div class="account-type-options">
                     <div class="type-card @(selectedAccountType == "Individual" ? "selected" : "")" @onclick='() => selectedAccountType = "Individual"'>
                         <div class="type-icon">👤</div>
@@ -112,7 +111,7 @@
                             <p>Free forever. Buy and sell personal items.</p>
                         </div>
                     </div>
-                    
+
                     <div class="type-card business @(selectedAccountType == "Business" ? "selected-biz" : "")" @onclick='() => selectedAccountType = "Business"'>
                         <div class="type-icon">🏢</div>
                         <div class="type-text">
@@ -121,21 +120,21 @@
                         </div>
                     </div>
                 </div>
-                
+
                 <button class="btn-pay" @onclick="HandleModalNext" type="button">Next</button>
-                <button class="btn-cancel" @onclick="() => showAccountModal = false">Cancel</button>
+                <button class="btn-cancel" @onclick="() => showAccountModal = false" type="button">Cancel</button>
             }
             else
             {
                 <h2 class="modal-title">Business Subscription</h2>
                 <p class="modal-subtitle">Secure $5 payment for your professional account.</p>
-                
+
                 <div class="simulated-payment-box">
                     <span class="pay-amount">$5.00</span>
                     <span class="pay-desc">One-time registration fee</span>
                 </div>
 
-                <button class="btn-pay" @onclick="ProcessBusinessPayment" disabled="@isProcessing">
+                <button class="btn-pay" @onclick="ProcessBusinessPayment" disabled="@isProcessing" type="button">
                     @if (isProcessing)
                     {
                         <span class="spinner"></span> <span>Processing Payment...</span>
@@ -145,10 +144,10 @@
                         <span>Pay $5 & Complete Registration</span>
                     }
                 </button>
-                
+
                 @if (!isProcessing)
                 {
-                    <button class="btn-cancel" @onclick="() => isBusinessCheckout = false">Back</button>
+                    <button class="btn-cancel" @onclick="() => isBusinessCheckout = false" type="button">Back</button>
                 }
             }
         </div>
@@ -157,8 +156,8 @@
 
 <style>
     /* ==========================================================================
-       BASE PAGE STYLING (Matches Login Theme)
-       ========================================================================== */
+           BASE PAGE STYLING (Matches Login Theme)
+           ========================================================================== */
     .auth-page {
         min-height: 100vh;
         display: flex;
@@ -185,19 +184,19 @@
         margin-bottom: 32px;
     }
 
-    .auth-header h1 {
-        margin: 0 0 8px 0;
-        font-size: 2rem;
-        font-weight: 800;
-        color: #0f172a;
-        letter-spacing: -0.025em;
-    }
+        .auth-header h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            font-weight: 800;
+            color: #0f172a;
+            letter-spacing: -0.025em;
+        }
 
-    .auth-header p {
-        margin: 0;
-        color: #64748b;
-        font-size: 1rem;
-    }
+        .auth-header p {
+            margin: 0;
+            color: #64748b;
+            font-size: 1rem;
+        }
 
     /* Forms & Inputs */
     .form-group {
@@ -226,16 +225,16 @@
         box-sizing: border-box;
     }
 
-    .form-control:focus {
-        outline: none;
-        background: #ffffff;
-        border-color: #3b82f6;
-        box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
-    }
+        .form-control:focus {
+            outline: none;
+            background: #ffffff;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
 
-    .form-control::placeholder {
-        color: #94a3b8;
-    }
+        .form-control::placeholder {
+            color: #94a3b8;
+        }
 
     /* Validation & Alerts */
     .alert {
@@ -251,7 +250,9 @@
         gap: 10px;
     }
 
-    .alert-icon { font-size: 1.1rem; }
+    .alert-icon {
+        font-size: 1.1rem;
+    }
 
     .text-danger {
         color: #ef4444;
@@ -262,7 +263,7 @@
 
     /* Buttons & Spacing */
     .auth-btn-container {
-        margin-top: 32px; /* Perfect spacing above the button */
+        margin-top: 32px;
         margin-bottom: 16px;
     }
 
@@ -287,11 +288,11 @@
         box-shadow: 0 4px 6px -1px rgba(15, 23, 42, 0.1), 0 2px 4px -1px rgba(15, 23, 42, 0.06);
     }
 
-    .primary-btn:hover {
-        background: #1e293b;
-        transform: translateY(-1px);
-        box-shadow: 0 6px 12px -2px rgba(15, 23, 42, 0.15);
-    }
+        .primary-btn:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 12px -2px rgba(15, 23, 42, 0.15);
+        }
 
     /* Links */
     .auth-links {
@@ -301,20 +302,20 @@
         font-size: 0.95rem;
     }
 
-    .auth-links a {
-        color: #2563eb;
-        text-decoration: none;
-        font-weight: 600;
-        margin-left: 4px;
-    }
+        .auth-links a {
+            color: #2563eb;
+            text-decoration: none;
+            font-weight: 600;
+            margin-left: 4px;
+        }
 
-    .auth-links a:hover {
-        text-decoration: underline;
-    }
+            .auth-links a:hover {
+                text-decoration: underline;
+            }
 
     /* ==========================================================================
-       MODAL STYLES (Dark Toned Premium)
-       ========================================================================== */
+           MODAL STYLES (Dark Toned Premium)
+           ========================================================================== */
     .modal-backdrop {
         position: fixed;
         top: 0;
@@ -381,20 +382,20 @@
         box-sizing: border-box;
     }
 
-    .type-card:hover {
-        background: #334155;
-        transform: translateY(-2px);
-    }
+        .type-card:hover {
+            background: #334155;
+            transform: translateY(-2px);
+        }
 
-    .type-card.selected {
-        border-color: #3b82f6;
-        background: rgba(59, 130, 246, 0.1);
-    }
+        .type-card.selected {
+            border-color: #3b82f6;
+            background: rgba(59, 130, 246, 0.1);
+        }
 
-    .type-card.business.selected-biz {
-        border-color: #ff6600;
-        background: rgba(255, 102, 0, 0.1);
-    }
+        .type-card.business.selected-biz {
+            border-color: #ff6600;
+            background: rgba(255, 102, 0, 0.1);
+        }
 
     .type-icon {
         font-size: 2rem;
@@ -463,17 +464,17 @@
         gap: 12px;
     }
 
-    .btn-pay:hover:not(:disabled) {
-        background: #e65c00;
-        transform: translateY(-2px);
-        box-shadow: 0 6px 15px rgba(255, 102, 0, 0.3);
-    }
+        .btn-pay:hover:not(:disabled) {
+            background: #e65c00;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 15px rgba(255, 102, 0, 0.3);
+        }
 
-    .btn-pay:disabled {
-        background: #334155;
-        color: #94a3b8;
-        cursor: not-allowed;
-    }
+        .btn-pay:disabled {
+            background: #334155;
+            color: #94a3b8;
+            cursor: not-allowed;
+        }
 
     .btn-cancel {
         background: transparent;
@@ -488,7 +489,9 @@
         transition: color 0.2s;
     }
 
-    .btn-cancel:hover { color: #f8fafc; }
+        .btn-cancel:hover {
+            color: #f8fafc;
+        }
 
     /* Animations */
     .spinner {
@@ -500,16 +503,53 @@
         animation: spin 1s linear infinite;
     }
 
-    @@keyframes spin { to { transform: rotate(360deg); } }
-    @@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    @@keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    @@keyframes slideUp {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
 
     /* Responsive */
     @@media (max-width: 480px) {
-        .auth-page { padding: 16px; }
-        .auth-card { padding: 32px 24px; border-radius: 20px; }
-        .auth-header h1 { font-size: 1.75rem; }
-        .modal-card { padding: 32px 24px; border-radius: 20px; }
+        .auth-page {
+            padding: 16px;
+        }
+
+        .auth-card {
+            padding: 32px 24px;
+            border-radius: 20px;
+        }
+
+        .auth-header h1 {
+            font-size: 1.75rem;
+        }
+
+        .modal-card {
+            padding: 32px 24px;
+            border-radius: 20px;
+        }
     }
 </style>
 
@@ -529,7 +569,7 @@
     private bool showAccountModal = false;
     private bool isBusinessCheckout = false;
     private bool isProcessing = false;
-    
+
     private string selectedAccountType = "Individual";
 
     public void PromptAccountType()
@@ -552,10 +592,10 @@
     public async Task ProcessBusinessPayment()
     {
         isProcessing = true;
-        StateHasChanged(); 
-        
-        await Task.Delay(2500); 
-        
+        StateHasChanged();
+
+        await Task.Delay(2500);
+
         await RegisterUser("Business");
     }
 
@@ -582,23 +622,32 @@
 
         Logger.LogInformation("User created a new account with password.");
 
-        var userId = await UserManager.GetUserIdAsync(user);
-        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+        // Wrap email confirmation in a try/catch so local SMTP timeouts never crash database registration
+        try
+        {
+            var userId = await UserManager.GetUserIdAsync(user);
+            var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+            code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
 
-        var callbackUrl = NavigationManager.GetUriWithQueryParameters(
-            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-            new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
+            var callbackUrl = NavigationManager.GetUriWithQueryParameters(
+                NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+                new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
 
-        await EmailSender.SendConfirmationLinkAsync(user, FormInput.Email, HtmlEncoder.Default.Encode(callbackUrl));
+            await EmailSender.SendConfirmationLinkAsync(user, FormInput.Email, HtmlEncoder.Default.Encode(callbackUrl));
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to send confirmation email during registration. Proceeding to navigation.");
+        }
 
         if (UserManager.Options.SignIn.RequireConfirmedAccount)
         {
-            RedirectManager.RedirectTo("Account/RegisterConfirmation", new Dictionary<string, object?> { ["email"] = FormInput.Email });
+            NavigationManager.NavigateTo($"/Account/RegisterConfirmation?email={Uri.EscapeDataString(FormInput.Email)}", forceLoad: true);
             return;
         }
 
-        RedirectManager.RedirectTo("Account/Login", new Dictionary<string, object?> { ["ReturnUrl"] = ReturnUrl ?? "/" });
+        var targetUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/Account/Login" : $"/Account/Login?ReturnUrl={Uri.EscapeDataString(ReturnUrl)}";
+        NavigationManager.NavigateTo(targetUrl, forceLoad: true);
     }
 
     private ApplicationUser CreateUser()
