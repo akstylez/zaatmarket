@@ -12,7 +12,7 @@
 @inject IJSRuntime JSRuntime
 @inject ZaatMarket.Services.ICartService Cart
 @inject ZaatMarket.Services.CurrencyStateService CurrencyState
-@inject ApplicationDbContext Db
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager Nav
 @inject AuthenticationStateProvider AuthStateProvider
 @implements IDisposable
@@ -124,7 +124,7 @@
                     @foreach (var p in items)
                     {
                         <div class="card product-card">
-                            
+
                             <div class="product-img-wrapper" @onclick="@(() => Nav.NavigateTo($"/products/{p.Id}"))">
                                 @if (!string.IsNullOrWhiteSpace(p.ImagePath))
                                 {
@@ -150,11 +150,11 @@
                             </div>
 
                             <div class="card-body">
-                                
+
                                 <div class="card-top-row">
                                     <div class="category-tag">@p.Category</div>
-                                    @{ 
-                                        var accountType = sellerAccountTypes.TryGetValue(p.OwnerUserId ?? "", out var t) ? t : "Individual"; 
+                                    @{
+                                        var accountType = sellerAccountTypes.TryGetValue(p.OwnerUserId ?? "", out var t) ? t : "Individual";
                                     }
                                     @if (accountType == "Business")
                                     {
@@ -165,14 +165,14 @@
                                         <span class="seller-badge ind-badge" title="Individual Seller">👤 Ind</span>
                                     }
                                 </div>
-                                
+
                                 <div class="title" title="@p.Title">@p.Title</div>
 
                                 <div class="product-location">
-                                    <span class="loc-icon">📍</span> 
+                                    <span class="loc-icon">📍</span>
                                     @(string.IsNullOrWhiteSpace(p.Location) ? "Harare" : p.Location)
                                 </div>
-                                
+
                                 <div class="price">@CurrencyState.FormatPrice(p.Price)</div>
 
                                 <div class="listed muted">
@@ -183,7 +183,7 @@
                                     <button type="button" class="btn btn-primary add-cart-btn" @onclick="() => AddToCartAsync(p)">
                                         🛒 Add
                                     </button>
-                                    
+
                                     <button class="btn btn-ghost view-btn" type="button" @onclick="@(() => Nav.NavigateTo($"/products/{p.Id}"))">
                                         View
                                     </button>
@@ -206,104 +206,439 @@
 
 <style>
     /* --- Layout --- */
-    .page-container { max-width: 1300px; margin: 0 auto; padding: 40px 20px; font-family: system-ui, -apple-system, sans-serif; }
-    .page-header { margin-bottom: 30px; }
-    .page-title { font-size: 2.5rem; font-weight: 800; color: #0f172a; margin: 0 0 8px 0; }
-    .page-subtitle { color: #64748b; font-size: 1.1rem; }
+    .page-container {
+        max-width: 1300px;
+        margin: 0 auto;
+        padding: 40px 20px;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
 
-    .layout-grid { display: grid; grid-template-columns: 280px 1fr; gap: 30px; align-items: start; }
+    .page-header {
+        margin-bottom: 30px;
+    }
+
+    .page-title {
+        font-size: 2.5rem;
+        font-weight: 800;
+        color: #0f172a;
+        margin: 0 0 8px 0;
+    }
+
+    .page-subtitle {
+        color: #64748b;
+        font-size: 1.1rem;
+    }
+
+    .layout-grid {
+        display: grid;
+        grid-template-columns: 280px 1fr;
+        gap: 30px;
+        align-items: start;
+    }
 
     /* --- Sidebar Filters --- */
-    .filters-panel { background: #ffffff; border-radius: 16px; padding: 24px; border: 1px solid #e2e8f0; position: sticky; top: 24px; }
-    .panel-title { font-size: 1.2rem; font-weight: 700; color: #0f172a; margin: 0 0 20px 0; padding-bottom: 15px; border-bottom: 1px solid #f1f5f9; }
-    
-    .field { margin-bottom: 18px; }
-    .label { display: block; font-size: 0.85rem; font-weight: 700; color: #475569; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .input, .select { width: 100%; padding: 10px 14px; border-radius: 10px; border: 1px solid #cbd5e1; background: #f8fafc; font-size: 0.95rem; color: #0f172a; transition: 0.2s; outline: none; }
-    .input:focus, .select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); background: #ffffff; }
-    
-    .search-input-wrapper { position: relative; }
-    .search-icon { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); opacity: 0.5; font-size: 0.9rem; }
-    .with-icon { padding-left: 36px; }
+    .filters-panel {
+        background: #ffffff;
+        border-radius: 16px;
+        padding: 24px;
+        border: 1px solid #e2e8f0;
+        position: sticky;
+        top: 24px;
+    }
 
-    .price-range-group { display: flex; gap: 12px; }
-    .price-range-group .field { flex: 1; }
+    .panel-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: #0f172a;
+        margin: 0 0 20px 0;
+        padding-bottom: 15px;
+        border-bottom: 1px solid #f1f5f9;
+    }
 
-    .btn-row { display: flex; gap: 10px; margin-top: 24px; }
-    .btn { padding: 10px 16px; border-radius: 10px; font-weight: 600; cursor: pointer; transition: 0.2s; border: none; font-size: 0.95rem; text-align: center; }
-    .btn-primary { background: #0f172a; color: white; }
-    .btn-primary:hover { background: #1e293b; transform: translateY(-1px); }
-    .btn-ghost { background: #f1f5f9; color: #475569; }
-    .btn-ghost:hover { background: #e2e8f0; color: #0f172a; }
-    .btn-danger { background: #fee2e2; color: #b91c1c; }
-    .btn-danger:hover { background: #fca5a5; color: #991b1b; }
+    .field {
+        margin-bottom: 18px;
+    }
 
-    .divider { border: 0; border-top: 1px solid #e2e8f0; margin: 24px 0; }
-    .browse-title { font-weight: 700; color: #0f172a; margin-bottom: 12px; font-size: 1rem; }
-    .cat-list { list-style: none; padding: 0; margin: 0; }
-    .cat-list li { margin-bottom: 6px; }
-    .cat-link { display: block; padding: 8px 12px; color: #475569; text-decoration: none; border-radius: 8px; transition: 0.2s; font-size: 0.95rem; }
-    .cat-link:hover { background: #f1f5f9; color: #2563eb; font-weight: 600; }
+    .label {
+        display: block;
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: #475569;
+        margin-bottom: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .input, .select {
+        width: 100%;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: 1px solid #cbd5e1;
+        background: #f8fafc;
+        font-size: 0.95rem;
+        color: #0f172a;
+        transition: 0.2s;
+        outline: none;
+    }
+
+        .input:focus, .select:focus {
+            border-color: #2563eb;
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+            background: #ffffff;
+        }
+
+    .search-input-wrapper {
+        position: relative;
+    }
+
+    .search-icon {
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        opacity: 0.5;
+        font-size: 0.9rem;
+    }
+
+    .with-icon {
+        padding-left: 36px;
+    }
+
+    .price-range-group {
+        display: flex;
+        gap: 12px;
+    }
+
+        .price-range-group .field {
+            flex: 1;
+        }
+
+    .btn-row {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+    }
+
+    .btn {
+        padding: 10px 16px;
+        border-radius: 10px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: 0.2s;
+        border: none;
+        font-size: 0.95rem;
+        text-align: center;
+    }
+
+    .btn-primary {
+        background: #0f172a;
+        color: white;
+    }
+
+        .btn-primary:hover {
+            background: #1e293b;
+            transform: translateY(-1px);
+        }
+
+    .btn-ghost {
+        background: #f1f5f9;
+        color: #475569;
+    }
+
+        .btn-ghost:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+    .btn-danger {
+        background: #fee2e2;
+        color: #b91c1c;
+    }
+
+        .btn-danger:hover {
+            background: #fca5a5;
+            color: #991b1b;
+        }
+
+    .divider {
+        border: 0;
+        border-top: 1px solid #e2e8f0;
+        margin: 24px 0;
+    }
+
+    .browse-title {
+        font-weight: 700;
+        color: #0f172a;
+        margin-bottom: 12px;
+        font-size: 1rem;
+    }
+
+    .cat-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+    }
+
+        .cat-list li {
+            margin-bottom: 6px;
+        }
+
+    .cat-link {
+        display: block;
+        padding: 8px 12px;
+        color: #475569;
+        text-decoration: none;
+        border-radius: 8px;
+        transition: 0.2s;
+        font-size: 0.95rem;
+    }
+
+        .cat-link:hover {
+            background: #f1f5f9;
+            color: #2563eb;
+            font-weight: 600;
+        }
 
     /* --- Main Content --- */
-    .results-bar { background: #f8fafc; border: 1px solid #e2e8f0; padding: 12px 20px; border-radius: 12px; margin-bottom: 24px; font-size: 0.95rem; color: #475569; }
-    .alert-danger { background: #fee2e2; color: #b91c1c; padding: 12px 16px; border-radius: 10px; border: 1px solid #fca5a5; margin-bottom: 20px; }
-    
-    .empty-state { text-align: center; padding: 60px 20px; background: #ffffff; border: 1px dashed #cbd5e1; border-radius: 16px; }
-    .empty-icon { font-size: 3rem; margin-bottom: 16px; opacity: 0.5; }
-    .empty-state h3 { color: #0f172a; margin: 0 0 8px 0; font-size: 1.5rem; }
-    .empty-state p { color: #64748b; margin: 0; }
+    .results-bar {
+        background: #f8fafc;
+        border: 1px solid #e2e8f0;
+        padding: 12px 20px;
+        border-radius: 12px;
+        margin-bottom: 24px;
+        font-size: 0.95rem;
+        color: #475569;
+    }
+
+    .alert-danger {
+        background: #fee2e2;
+        color: #b91c1c;
+        padding: 12px 16px;
+        border-radius: 10px;
+        border: 1px solid #fca5a5;
+        margin-bottom: 20px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 60px 20px;
+        background: #ffffff;
+        border: 1px dashed #cbd5e1;
+        border-radius: 16px;
+    }
+
+    .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .empty-state h3 {
+        color: #0f172a;
+        margin: 0 0 8px 0;
+        font-size: 1.5rem;
+    }
+
+    .empty-state p {
+        color: #64748b;
+        margin: 0;
+    }
 
     /* --- Product Cards & Picture Layout --- */
-    .cards-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 24px; }
-    
-    .product-card { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 16px; overflow: hidden; display: flex; flex-direction: column; transition: all 0.3s ease; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); }
-    .product-card:hover { transform: translateY(-5px); box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1); border-color: #cbd5e1; }
-    
-    .product-img-wrapper { height: 220px; width: 100%; background: #f1f5f9; position: relative; overflow: hidden; cursor: pointer; border-bottom: 1px solid #f1f5f9; }
-    .product-img { width: 100%; height: 100%; object-fit: cover; transition: transform 0.4s ease; }
-    .product-card:hover .product-img { transform: scale(1.05); } 
-    
-    .img-fallback { width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #94a3b8; font-size: 0.95rem; font-weight: 500; }
-    .fallback-icon { font-size: 2rem; margin-bottom: 8px; opacity: 0.5; }
+    .cards-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+        gap: 24px;
+    }
 
-    .card-body { padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }
-    
+    .product-card {
+        background: #ffffff;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        transition: all 0.3s ease;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+        .product-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 20px -5px rgba(0, 0, 0, 0.1);
+            border-color: #cbd5e1;
+        }
+
+    .product-img-wrapper {
+        height: 220px;
+        width: 100%;
+        background: #f1f5f9;
+        position: relative;
+        overflow: hidden;
+        cursor: pointer;
+        border-bottom: 1px solid #f1f5f9;
+    }
+
+    .product-img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        transition: transform 0.4s ease;
+    }
+
+    .product-card:hover .product-img {
+        transform: scale(1.05);
+    }
+
+    .img-fallback {
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        font-size: 0.95rem;
+        font-weight: 500;
+    }
+
+    .fallback-icon {
+        font-size: 2rem;
+        margin-bottom: 8px;
+        opacity: 0.5;
+    }
+
+    .card-body {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+
     /* NEW: Card Top Row */
-    .card-top-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
-    .category-tag { font-size: 0.75rem; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin: 0; }
-    
-    .seller-badge { font-size: 0.7rem; font-weight: 800; padding: 2px 6px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; text-transform: uppercase; letter-spacing: 0.5px; }
-    .business-badge { background: #fff7ed; color: #ff6600; border: 1px solid #fed7aa; }
-    .ind-badge { background: #f8fafc; color: #64748b; border: 1px solid #e2e8f0; }
-    
-    .title { font-weight: 700; font-size: 1.1rem; color: #0f172a; line-height: 1.4; margin-bottom: 8px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-    
-    .product-location { display: flex; align-items: center; gap: 4px; font-size: 0.85rem; color: #475569; margin-bottom: 12px; font-weight: 600; }
-    .loc-icon { font-size: 1rem; }
+    .card-top-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+    }
 
-    .price { font-weight: 800; font-size: 1.4rem; color: #ff6600; margin-bottom: auto; }
-    
-    .listed { font-size: 0.8rem; color: #94a3b8; margin-top: 16px; margin-bottom: 12px; }
+    .category-tag {
+        font-size: 0.75rem;
+        font-weight: 700;
+        color: #64748b;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin: 0;
+    }
 
-    .action-grid { display: flex; gap: 8px; margin-top: auto; }
-    .add-cart-btn { flex: 2; display: flex; justify-content: center; align-items: center; gap: 6px; }
-    .view-btn { flex: 1; }
-    .delete-btn { padding: 10px; display: flex; align-items: center; justify-content: center; }
+    .seller-badge {
+        font-size: 0.7rem;
+        font-weight: 800;
+        padding: 2px 6px;
+        border-radius: 6px;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .business-badge {
+        background: #fff7ed;
+        color: #ff6600;
+        border: 1px solid #fed7aa;
+    }
+
+    .ind-badge {
+        background: #f8fafc;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+    }
+
+    .title {
+        font-weight: 700;
+        font-size: 1.1rem;
+        color: #0f172a;
+        line-height: 1.4;
+        margin-bottom: 8px;
+        display: -webkit-box;
+        -webkit-line-clamp: 2;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+    }
+
+    .product-location {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.85rem;
+        color: #475569;
+        margin-bottom: 12px;
+        font-weight: 600;
+    }
+
+    .loc-icon {
+        font-size: 1rem;
+    }
+
+    .price {
+        font-weight: 800;
+        font-size: 1.4rem;
+        color: #ff6600;
+        margin-bottom: auto;
+    }
+
+    .listed {
+        font-size: 0.8rem;
+        color: #94a3b8;
+        margin-top: 16px;
+        margin-bottom: 12px;
+    }
+
+    .action-grid {
+        display: flex;
+        gap: 8px;
+        margin-top: auto;
+    }
+
+    .add-cart-btn {
+        flex: 2;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .view-btn {
+        flex: 1;
+    }
+
+    .delete-btn {
+        padding: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 
     /* --- Responsive --- */
     @@media (max-width: 900px) {
-        .layout-grid { grid-template-columns: 1fr; }
-        .filters-panel { position: static; margin-bottom: 24px; }
+        .layout-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .filters-panel {
+            position: static;
+            margin-bottom: 24px;
+        }
     }
 </style>
 
 @code {
     private List<Product> items = new();
     private List<string> categories = new();
-    private Dictionary<string, string> sellerAccountTypes = new(); // NEW: Stores the mapping of users to account types
+    private Dictionary<string, string> sellerAccountTypes = new();
     private string? error;
-    
+
     private string? currentUserId;
 
     // filters
@@ -325,7 +660,7 @@
         // --- URL PARAMETER CATCHER ---
         var uri = Nav.ToAbsoluteUri(Nav.Uri);
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(uri.Query);
-        
+
         // Catches category clicks
         if (query.TryGetValue("cat", out var cat))
             selectedCategory = cat.ToString();
@@ -345,7 +680,9 @@
 
     private async Task LoadCategoriesAsync()
     {
-        categories = await Db.Products
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        categories = await db.Products
             .Where(p => p.Category != null && p.Category != "")
             .Select(p => p.Category!)
             .Distinct()
@@ -357,7 +694,9 @@
     {
         error = null;
 
-        var q = Db.Products.AsQueryable();
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var q = db.Products.AsQueryable();
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -386,12 +725,12 @@
 
         items = await q.ToListAsync();
 
-        // NEW: Fetch and Map Account Types
+        // Fetch and Map Account Types
         var ownerIds = items.Select(x => x.OwnerUserId).Where(id => !string.IsNullOrEmpty(id)).Distinct().ToList();
-        
+
         if (ownerIds.Any())
         {
-            sellerAccountTypes = await Db.Users
+            sellerAccountTypes = await db.Users
                 .Where(u => ownerIds.Contains(u.Id))
                 .ToDictionaryAsync(u => u.Id, u => u.AccountType ?? "Individual");
         }
@@ -413,7 +752,9 @@
     {
         error = null;
 
-        var item = await Db.Products.FirstOrDefaultAsync(x => x.Id == id);
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var item = await db.Products.FirstOrDefaultAsync(x => x.Id == id);
         if (item is null)
         {
             error = "Product not found.";
@@ -426,8 +767,8 @@
             return;
         }
 
-        Db.Products.Remove(item);
-        await Db.SaveChangesAsync();
+        db.Products.Remove(item);
+        await db.SaveChangesAsync();
 
         await LoadCategoriesAsync();
         await LoadProductsAsync();
