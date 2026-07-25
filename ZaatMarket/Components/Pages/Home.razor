@@ -6,56 +6,234 @@
 @using ZaatMarket.Models
 
 @inject NavigationManager NavManager
-@inject ApplicationDbContext DbContext
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 
 <PageTitle>Z-A-A-T-T Marketplace</PageTitle>
 
 <style>
     /* --- Hero Styles --- */
-    .hero-search-container { display: flex; gap: 10px; margin: 30px 0; max-width: 500px; }
-    .hero-search-input { flex-grow: 1; padding: 15px 20px; border: 2px solid #e0e0e0; border-radius: 30px; font-size: 1.1rem; outline: none; transition: border-color 0.3s, box-shadow 0.3s; }
-    .hero-search-input:focus { border-color: #ff6600; box-shadow: 0 0 8px rgba(255, 102, 0, 0.2); }
-    .hero-search-btn { padding: 0 30px; border-radius: 30px; font-weight: bold; background-color: #ff6600; color: white; border: none; cursor: pointer; transition: background-color 0.3s; }
-    .hero-search-btn:hover { background-color: #e65c00; }
+    .hero-search-container {
+        display: flex;
+        gap: 10px;
+        margin: 30px 0;
+        max-width: 500px;
+    }
+
+    .hero-search-input {
+        flex-grow: 1;
+        padding: 15px 20px;
+        border: 2px solid #e0e0e0;
+        border-radius: 30px;
+        font-size: 1.1rem;
+        outline: none;
+        transition: border-color 0.3s, box-shadow 0.3s;
+    }
+
+        .hero-search-input:focus {
+            border-color: #ff6600;
+            box-shadow: 0 0 8px rgba(255, 102, 0, 0.2);
+        }
+
+    .hero-search-btn {
+        padding: 0 30px;
+        border-radius: 30px;
+        font-weight: bold;
+        background-color: #ff6600;
+        color: white;
+        border: none;
+        cursor: pointer;
+        transition: background-color 0.3s;
+    }
+
+        .hero-search-btn:hover {
+            background-color: #e65c00;
+        }
 
     /* --- Section Styles --- */
-    .section-title-center { text-align: center; font-size: 2rem; font-weight: 800; margin-bottom: 10px; color: #222; }
-    .section-subtitle-center { text-align: center; color: #666; margin-bottom: 40px; font-size: 1.1rem; }
-    .home-section { padding: 60px 20px; max-width: 1200px; margin: 0 auto; }
+    .section-title-center {
+        text-align: center;
+        font-size: 2rem;
+        font-weight: 800;
+        margin-bottom: 10px;
+        color: #222;
+    }
+
+    .section-subtitle-center {
+        text-align: center;
+        color: #666;
+        margin-bottom: 40px;
+        font-size: 1.1rem;
+    }
+
+    .home-section {
+        padding: 60px 20px;
+        max-width: 1200px;
+        margin: 0 auto;
+    }
 
     /* --- Grid & Cards --- */
-    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
-    .card { background: #fff; border-radius: 16px; padding: 25px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #f0f0f0; transition: transform 0.3s, box-shadow 0.3s; }
-    .card:hover { transform: translateY(-5px); box-shadow: 0 8px 24px rgba(0,0,0,0.1); }
+    .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 20px;
+    }
+
+    .card {
+        background: #fff;
+        border-radius: 16px;
+        padding: 25px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        border: 1px solid #f0f0f0;
+        transition: transform 0.3s, box-shadow 0.3s;
+    }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
 
     /* --- Trending Categories --- */
-    .category-row { display: flex; flex-wrap: wrap; gap: 15px; justify-content: center; margin-bottom: 40px; }
-    .category-pill { display: flex; align-items: center; gap: 8px; padding: 12px 24px; background: #f8f9fa; border-radius: 50px; text-decoration: none; color: #333; font-weight: 600; border: 1px solid #eee; transition: all 0.2s; }
-    .category-pill:hover { background: #ff6600; color: white; border-color: #ff6600; }
+    .category-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 15px;
+        justify-content: center;
+        margin-bottom: 40px;
+    }
+
+    .category-pill {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 12px 24px;
+        background: #f8f9fa;
+        border-radius: 50px;
+        text-decoration: none;
+        color: #333;
+        font-weight: 600;
+        border: 1px solid #eee;
+        transition: all 0.2s;
+    }
+
+        .category-pill:hover {
+            background: #ff6600;
+            color: white;
+            border-color: #ff6600;
+        }
 
     /* --- Product Grid --- */
-    .product-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 25px; }
-    .product-card { background: white; border-radius: 12px; overflow: hidden; border: 1px solid #eee; transition: transform 0.2s; display: flex; flex-direction: column; }
-    .product-card:hover { transform: translateY(-3px); box-shadow: 0 10px 20px rgba(0,0,0,0.08); }
-    .product-img-container { height: 220px; background: #f4f4f4; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-    .product-img-container img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
-    .product-info { padding: 20px; display: flex; flex-direction: column; flex-grow: 1; }
-    .product-title { font-weight: bold; font-size: 1.2rem; margin-bottom: 5px; color: #333; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .product-price { color: #ff6600; font-size: 1.4rem; font-weight: 800; margin-bottom: 15px; }
-    .product-meta { display: flex; justify-content: space-between; font-size: 0.9rem; color: #888; border-top: 1px solid #eee; padding-top: 15px; margin-top: auto; }
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 25px;
+    }
+
+    .product-card {
+        background: white;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid #eee;
+        transition: transform 0.2s;
+        display: flex;
+        flex-direction: column;
+    }
+
+        .product-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+        }
+
+    .product-img-container {
+        height: 220px;
+        background: #f4f4f4;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+    }
+
+        .product-img-container img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center;
+        }
+
+    .product-info {
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+    }
+
+    .product-title {
+        font-weight: bold;
+        font-size: 1.2rem;
+        margin-bottom: 5px;
+        color: #333;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .product-price {
+        color: #ff6600;
+        font-size: 1.4rem;
+        font-weight: 800;
+        margin-bottom: 15px;
+    }
+
+    .product-meta {
+        display: flex;
+        justify-content: space-between;
+        font-size: 0.9rem;
+        color: #888;
+        border-top: 1px solid #eee;
+        padding-top: 15px;
+        margin-top: auto;
+    }
 
     /* --- How it works --- */
-    .step-number { width: 40px; height: 40px; background: #ffe0cc; color: #ff6600; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 1.2rem; margin-bottom: 15px; }
+    .step-number {
+        width: 40px;
+        height: 40px;
+        background: #ffe0cc;
+        color: #ff6600;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+        font-size: 1.2rem;
+        margin-bottom: 15px;
+    }
 
     /* --- Floating Animation --- */
     @@keyframes float {
-        0% { transform: translateY(0px); }
-        50% { transform: translateY(-12px); }
-        100% { transform: translateY(0px); }
+        0% {
+            transform: translateY(0px);
+        }
+
+        50% {
+            transform: translateY(-12px);
+        }
+
+        100% {
+            transform: translateY(0px);
+        }
     }
-    .fc1 { animation: float 5s ease-in-out infinite; }
-    .fc2 { animation: float 6s ease-in-out infinite 1s; }
-    .fc3 { animation: float 4.5s ease-in-out infinite 2s; }
+
+    .fc1 {
+        animation: float 5s ease-in-out infinite;
+    }
+
+    .fc2 {
+        animation: float 6s ease-in-out infinite 1s;
+    }
+
+    .fc3 {
+        animation: float 4.5s ease-in-out infinite 2s;
+    }
 </style>
 
 <div class="page-container home">
@@ -84,7 +262,7 @@
                        @bind="homeSearchQuery"
                        @bind:event="oninput"
                        @onkeyup="HandleKeyPress" />
-                       
+
                 <button class="hero-search-btn" @onclick="ExecuteSearch">
                     Search
                 </button>
@@ -98,7 +276,7 @@
 
         <div class="hero-right" style="flex: 1; min-width: 320px; display: flex; justify-content: center; align-items: center; min-height: 500px;">
             <div class="float-stage" style="position: relative; height: 460px; width: 100%; max-width: 440px;">
-                
+
                 @if (HeroProducts.Count > 0)
                 {
                     <div class="float-card fc1" style="background: white; padding: 15px; border-radius: 16px; box-shadow: 0 12px 35px rgba(0,0,0,0.1); width: 240px; position: absolute; left: calc(50% - 120px); top: 0px; z-index: 3; text-align: center;">
@@ -164,11 +342,11 @@
                         <div class="product-info">
                             <div class="product-title">@product.Title</div>
                             <div class="product-price">@product.Price.ToString("C")</div>
-                            
+
                             <a href="/product/@product.Id" class="btn btn-primary" style="width: 100%; padding: 12px; background: #111; color: white; border: none; border-radius: 8px; cursor: pointer; margin-bottom: 15px; text-align: center; text-decoration: none; font-weight: bold; display: block;">
                                 View Details
                             </a>
-                            
+
                             <div class="product-meta">
                                 <span>👤 Verified Seller</span>
                                 <span>📍 Local</span>
@@ -186,7 +364,7 @@
                 </div>
             }
         </div>
-        
+
         <div style="text-align: center; margin-top: 40px;">
             <a href="/products" class="btn" style="padding: 12px 30px; border: 2px solid #e0e0e0; border-radius: 30px; text-decoration: none; color: #333; font-weight: bold;">View All Items</a>
         </div>
@@ -226,14 +404,14 @@
     <section class="home-section" style="background-color: #fff; border-top: 1px solid #f0f0f0;">
         <h2 class="section-title-center">How It Works</h2>
         <p class="section-subtitle-center">Start buying and selling in three easy steps</p>
-        
+
         <div class="grid" style="text-align: center;">
             <div class="card" style="border: none; box-shadow: none; background: transparent;">
                 <div class="step-number" style="margin: 0 auto 20px auto;">1</div>
                 <h3 style="font-size: 1.2rem; margin-bottom: 10px;">Create an Account</h3>
                 <p style="color: #666;">Sign up for free in less than 60 seconds to access all marketplace features.</p>
             </div>
-            
+
             <div class="card" style="border: none; box-shadow: none; background: transparent;">
                 <div class="step-number" style="margin: 0 auto 20px auto;">2</div>
                 <h3 style="font-size: 1.2rem; margin-bottom: 10px;">List or Browse</h3>
@@ -267,24 +445,27 @@
 @code {
     private string homeSearchQuery = "";
     private bool isLoading = true;
-    
+
     // Using your actual DB Product model
     private List<Product> HeroProducts = new();
     private List<Product> FreshProducts = new();
 
     protected override async Task OnInitializedAsync()
     {
-        try 
+        try
         {
+            // Spawning a safe, private database context just for this query
+            using var db = await DbFactory.CreateDbContextAsync();
+
             // Pull the top 11 newest products from your SQL database
-            var latestProducts = await DbContext.Products
+            var latestProducts = await db.Products
                 .OrderByDescending(p => p.Id)
                 .Take(11)
                 .ToListAsync();
 
             // First 3 go to the floating hero animation
             HeroProducts = latestProducts.Take(3).ToList();
-            
+
             // The remaining 8 go to the "Freshly Listed" grid below
             FreshProducts = latestProducts.Skip(3).Take(8).ToList();
         }
