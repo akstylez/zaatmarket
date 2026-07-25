@@ -24,6 +24,7 @@ builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
+
 // ==========================================
 // 2. BLAZOR & SIGNALR (WEB SOCKETS)
 // ==========================================
@@ -121,6 +122,9 @@ else
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
+
+// CRITICAL FIX: UseStaticFiles must be called before MapStaticAssets to serve runtime uploaded images!
+app.UseStaticFiles();
 app.MapStaticAssets();
 
 app.UseAuthentication();
@@ -232,7 +236,9 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     try
     {
-        var context = services.GetRequiredService<ApplicationDbContext>();
+        // Safely resolve via IDbContextFactory to guarantee thread-safe startup migrations
+        var factory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
+        using var context = factory.CreateDbContext();
         context.Database.Migrate();
     }
     catch (Exception ex)
