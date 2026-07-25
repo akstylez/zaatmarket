@@ -15,7 +15,7 @@
 
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
-@inject ApplicationDbContext Db
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
 @inject IJSRuntime JSRuntime
@@ -54,7 +54,7 @@
                 <button class="nav-btn @(activeTab == "Dashboard" ? "active" : "")" @onclick='() => SwitchTab("Dashboard")'>
                     <span class="nav-icon">📊</span> Dashboard
                 </button>
-                
+
                 <button class="nav-btn @(activeTab == "Settings" ? "active" : "")" @onclick='() => SwitchTab("Settings")'>
                     <span class="nav-icon">⚙️</span> Settings & Profile
                 </button>
@@ -62,14 +62,14 @@
                 <button class="nav-btn @(activeTab == "About" ? "active" : "")" @onclick='() => SwitchTab("About")'>
                     <span class="nav-icon">💭</span> Bio & About
                 </button>
-                
+
                 <hr class="nav-divider" />
-                
+
                 <a href="/my-listings" class="nav-link"><span class="nav-icon">📦</span> My Listings</a>
                 <a href="/sell" class="nav-link"><span class="nav-icon">➕</span> Add Product</a>
                 <a href="/products" class="nav-link"><span class="nav-icon">🛍️</span> Browse Products</a>
                 <a href="/cart" class="nav-link"><span class="nav-icon">🛒</span> My Cart</a>
-                
+
                 <a href="/messages" class="nav-link nav-link-flex">
                     <span><span class="nav-icon">💬</span> Messages</span>
                     @if (hasUnreadMessages)
@@ -79,7 +79,7 @@
                 </a>
 
                 <a href="/product-tracking" class="nav-link premium-link">📍 Live Tracker / Maps</a>
-                
+
                 @if (currentUser != null && currentUser.IsPremiumAgent)
                 {
                     <a href="/agent-dashboard" class="nav-link agent-link">⚡ Agent Dashboard</a>
@@ -100,7 +100,7 @@
         </aside>
 
         <main class="account-main">
-            
+
             @if (activeTab == "Dashboard")
             {
                 <div class="tab-fade-in dashboard-grid">
@@ -109,7 +109,7 @@
                             <span class="hero-badge">Overview</span>
                             <div class="hero-title-row">
                                 <h1>Welcome, @displayName</h1>
-                                
+
                                 @if (accountType == "Business")
                                 {
                                     <div class="account-type-pill business-pill">🏢 Verified Business</div>
@@ -395,8 +395,8 @@
 
 <style>
     /* ==========================================================================
-       VARIABLES & BASE SETUP
-       ========================================================================== */
+           VARIABLES & BASE SETUP
+           ========================================================================== */
     :root {
         --bg-color: #f8fafc;
         --card-bg: #ffffff;
@@ -429,8 +429,8 @@
     }
 
     /* ==========================================================================
-       SIDEBAR NAVIGATION
-       ========================================================================== */
+           SIDEBAR NAVIGATION
+           ========================================================================== */
     .account-sidebar {
         background: var(--card-bg);
         border: 1px solid var(--border-color);
@@ -492,9 +492,18 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    
-    .business-badge { background: #fff7ed; color: #ff6600; border: 1px solid #fed7aa; }
-    .ind-badge { background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
+
+    .business-badge {
+        background: #fff7ed;
+        color: #ff6600;
+        border: 1px solid #fed7aa;
+    }
+
+    .ind-badge {
+        background: #f1f5f9;
+        color: #64748b;
+        border: 1px solid #e2e8f0;
+    }
 
     .side-nav {
         display: flex;
@@ -552,9 +561,20 @@
         box-shadow: 0 0 0 4px #fee2e2;
     }
 
-    .premium-link { color: #2563eb; background: #eff6ff; }
-    .agent-link { color: #d97706; background: #fef3c7; }
-    .upgrade-link { color: #d97706; border: 1px dashed #fcd34d; }
+    .premium-link {
+        color: #2563eb;
+        background: #eff6ff;
+    }
+
+    .agent-link {
+        color: #d97706;
+        background: #fef3c7;
+    }
+
+    .upgrade-link {
+        color: #d97706;
+        border: 1px dashed #fcd34d;
+    }
 
     .side-section {
         margin-top: auto;
@@ -574,14 +594,14 @@
         transition: 0.2s;
     }
 
-    .danger-btn:hover {
-        background: #fee2e2;
-        color: #b91c1c;
-    }
+        .danger-btn:hover {
+            background: #fee2e2;
+            color: #b91c1c;
+        }
 
     /* ==========================================================================
-       DASHBOARD MAIN AREA
-       ========================================================================== */
+           DASHBOARD MAIN AREA
+           ========================================================================== */
     .account-main {
         display: flex;
         flex-direction: column;
@@ -627,12 +647,12 @@
         margin-bottom: 12px;
     }
 
-    .hero-title-row h1 {
-        margin: 0;
-        font-size: 2.2rem;
-        color: var(--text-main);
-        font-weight: 800;
-    }
+        .hero-title-row h1 {
+            margin: 0;
+            font-size: 2.2rem;
+            color: var(--text-main);
+            font-weight: 800;
+        }
 
     .account-type-pill {
         display: inline-flex;
@@ -644,9 +664,18 @@
         font-size: 0.8rem;
         border: 1px solid transparent;
     }
-    
-    .business-pill { background: #fff7ed; color: #ff6600; border-color: #fed7aa; }
-    .ind-pill { background: #f8fafc; color: #64748b; border-color: #e2e8f0; }
+
+    .business-pill {
+        background: #fff7ed;
+        color: #ff6600;
+        border-color: #fed7aa;
+    }
+
+    .ind-pill {
+        background: #f8fafc;
+        color: #64748b;
+        border-color: #e2e8f0;
+    }
 
     .pro-agent-badge {
         display: inline-flex;
@@ -669,9 +698,17 @@
     }
 
     @@keyframes pulse {
-        0% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4); }
-        70% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, 0); }
+        0% {
+            box-shadow: 0 0 0 0 rgba(251, 191, 36, 0.4);
+        }
+
+        70% {
+            box-shadow: 0 0 0 6px rgba(251, 191, 36, 0);
+        }
+
+        100% {
+            box-shadow: 0 0 0 0 rgba(251, 191, 36, 0);
+        }
     }
 
     .hero-text {
@@ -731,11 +768,11 @@
         text-align: center;
     }
 
-    .quick-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 20px rgba(0,0,0,0.08);
-        border-color: #cbd5e1;
-    }
+        .quick-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px rgba(0,0,0,0.08);
+            border-color: #cbd5e1;
+        }
 
     .quick-icon {
         font-size: 2rem;
@@ -770,14 +807,14 @@
         border-bottom: 1px solid var(--border-color);
     }
 
-    .panel-header h3 {
-        margin: 0;
-        font-size: 1.1rem;
-        color: var(--text-main);
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
+        .panel-header h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            color: var(--text-main);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
 
     .text-link {
         background: transparent;
@@ -787,8 +824,10 @@
         cursor: pointer;
         font-size: 0.9rem;
     }
-    
-    .text-link:hover { text-decoration: underline; }
+
+        .text-link:hover {
+            text-decoration: underline;
+        }
 
     /* Message List CSS */
     .message-list {
@@ -808,16 +847,16 @@
         border: 1px solid transparent;
     }
 
-    .message-item:hover {
-        background: #ffffff;
-        border-color: var(--border-color);
-        box-shadow: 0 2px 8px rgba(0,0,0,0.05);
-    }
+        .message-item:hover {
+            background: #ffffff;
+            border-color: var(--border-color);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+        }
 
-    .message-item.unread {
-        background: #eff6ff;
-        border-left: 3px solid #3b82f6;
-    }
+        .message-item.unread {
+            background: #eff6ff;
+            border-left: 3px solid #3b82f6;
+        }
 
     .msg-avatar {
         width: 40px;
@@ -881,10 +920,10 @@
         transition: 0.2s;
     }
 
-    .listing-item:hover {
-        background: #f8fafc;
-        border-color: #cbd5e1;
-    }
+        .listing-item:hover {
+            background: #f8fafc;
+            border-color: #cbd5e1;
+        }
 
     .listing-img, .listing-img-placeholder {
         width: 48px;
@@ -906,11 +945,11 @@
         flex: 1;
     }
 
-    .listing-details h4 {
-        margin: 0 0 4px 0;
-        font-size: 0.95rem;
-        color: var(--text-main);
-    }
+        .listing-details h4 {
+            margin: 0 0 4px 0;
+            font-size: 0.95rem;
+            color: var(--text-main);
+        }
 
     .listing-price {
         font-size: 0.9rem;
@@ -939,7 +978,7 @@
         margin-bottom: 12px;
         opacity: 0.5;
     }
-    
+
     .btn-small {
         margin-top: 12px;
         padding: 8px 16px;
@@ -951,11 +990,13 @@
         transition: 0.2s;
     }
 
-    .btn-small:hover { background: #f1f5f9; }
+        .btn-small:hover {
+            background: #f1f5f9;
+        }
 
     /* ==========================================================================
-       SETTINGS PANEL
-       ========================================================================== */
+           SETTINGS PANEL
+           ========================================================================== */
     .settings-panel {
         background: var(--card-bg);
         border: 1px solid var(--border-color);
@@ -973,17 +1014,17 @@
         border-bottom: 1px solid var(--border-color);
     }
 
-    .settings-header h1 {
-        margin: 0 0 8px 0;
-        font-size: 2rem;
-        color: var(--text-main);
-        font-weight: 800;
-    }
+        .settings-header h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            color: var(--text-main);
+            font-weight: 800;
+        }
 
-    .settings-header p {
-        margin: 0;
-        color: var(--text-muted);
-    }
+        .settings-header p {
+            margin: 0;
+            color: var(--text-muted);
+        }
 
     .success-pill {
         background: #dcfce7;
@@ -1060,11 +1101,11 @@
         box-sizing: border-box;
     }
 
-    .form-control:focus {
-        outline: none;
-        border-color: var(--accent);
-        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
-    }
+        .form-control:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.1);
+        }
 
     .read-only {
         background: #f8fafc;
@@ -1122,8 +1163,10 @@
         color: #cbd5e1;
     }
 
-    .file-input { display: none; }
-    
+    .file-input {
+        display: none;
+    }
+
     .btn-outline {
         display: inline-block;
         background: white;
@@ -1136,8 +1179,10 @@
         transition: 0.2s;
     }
 
-    .btn-outline:hover { background: #f8fafc; }
-    
+        .btn-outline:hover {
+            background: #f8fafc;
+        }
+
     .uploading-text {
         display: block;
         color: #2563eb;
@@ -1168,8 +1213,14 @@
         transition: 0.2s;
     }
 
-    .btn-primary:hover:not(:disabled) { background: var(--accent-hover); }
-    .btn-primary:disabled { background: #fdba74; cursor: not-allowed; }
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
+
+        .btn-primary:disabled {
+            background: #fdba74;
+            cursor: not-allowed;
+        }
 
     .btn-ghost {
         background: transparent;
@@ -1183,50 +1234,82 @@
         transition: 0.2s;
     }
 
-    .btn-ghost:hover { background: #f1f5f9; color: var(--text-main); }
+        .btn-ghost:hover {
+            background: #f1f5f9;
+            color: var(--text-main);
+        }
 
     /* Animations */
-    .tab-fade-in { animation: fadeIn 0.3s ease-out forwards; }
+    .tab-fade-in {
+        animation: fadeIn 0.3s ease-out forwards;
+    }
+
     @@keyframes fadeIn {
-        from { opacity: 0; transform: translateY(10px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     /* Responsive */
     @@media (max-width: 1024px) {
-        .account-shell { grid-template-columns: 240px 1fr; }
-        .dashboard-grid { grid-template-columns: 1fr; }
+        .account-shell {
+            grid-template-columns: 240px 1fr;
+        }
+
+        .dashboard-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     @@media (max-width: 800px) {
-        .account-shell { grid-template-columns: 1fr; }
-        .account-sidebar { position: static; height: auto; }
-        .settings-section { grid-template-columns: 1fr; gap: 16px; }
-        .flex-row { flex-direction: column; align-items: flex-start; }
+        .account-shell {
+            grid-template-columns: 1fr;
+        }
+
+        .account-sidebar {
+            position: static;
+            height: auto;
+        }
+
+        .settings-section {
+            grid-template-columns: 1fr;
+            gap: 16px;
+        }
+
+        .flex-row {
+            flex-direction: column;
+            align-items: flex-start;
+        }
     }
 </style>
 
 @code {
     private string activeTab = "Dashboard";
-    
+
     private string displayName = "User";
     private string email = "Not available";
     private string userId = "Not available";
     private string location = "Not set";
     private string languageDisplay = "English";
     private string profilePicUrl = "";
-    private string accountType = "Individual"; 
+    private string accountType = "Individual";
     private bool hasUnreadMessages = false;
-    
+
     private bool updateSuccess = false;
     private bool isSaving = false;
     private bool isUploading = false;
     private ApplicationUser? currentUser;
-    
+
     // Lists for Dashboard Previews
     private List<Message> recentMessages = new();
     private List<Product> recentListings = new();
-    
+
     [SupplyParameterFromForm]
     private ProfileInputModel Input { get; set; } = new();
 
@@ -1238,8 +1321,8 @@
     private void SwitchTab(string tabName)
     {
         activeTab = tabName;
-        updateSuccess = false; 
-        
+        updateSuccess = false;
+
         if ((tabName == "Settings" || tabName == "About") && currentUser != null)
         {
             Input.DisplayName = currentUser.DisplayName ?? "";
@@ -1262,22 +1345,24 @@
 
             if (userId != "Not available")
             {
-                currentUser = await Db.Users.FirstOrDefaultAsync(u => u.Id == userId);
-                
-             
-                hasUnreadMessages = await Db.Messages.AnyAsync(m => m.ReceiverId == userId && !m.IsRead);
-                
-                recentMessages = await Db.Messages
-                    .Where(m => m.ReceiverId == userId)
-                    .OrderByDescending(m => m.SentAtUtc)
-                    .Take(3)
-                    .ToListAsync();
-                    
-                recentListings = await Db.Products
-                    .Where(p => p.OwnerUserId == userId)
-                    .OrderByDescending(p => p.CreatedAtUtc)
-                    .Take(3)
-                    .ToListAsync();
+                // Spawning an isolated database context just for this query block
+                using var db = await DbFactory.CreateDbContextAsync();
+
+                currentUser = await db.Users.FirstOrDefaultAsync(u => u.Id == userId);
+
+                hasUnreadMessages = await db.Messages.AnyAsync(m => m.ReceiverId == userId && !m.IsRead);
+
+                recentMessages = await db.Messages
+                                    .Where(m => m.ReceiverId == userId)
+                                    .OrderByDescending(m => m.SentAtUtc)
+                                    .Take(3)
+                                    .ToListAsync();
+
+                recentListings = await db.Products
+                                    .Where(p => p.OwnerUserId == userId)
+                                    .OrderByDescending(p => p.CreatedAtUtc)
+                                    .Take(3)
+                                    .ToListAsync();
 
                 if (currentUser != null)
                 {
@@ -1285,8 +1370,8 @@
                     email = currentUser.Email ?? "Not available";
                     location = currentUser.Location ?? "Not set";
                     profilePicUrl = currentUser.ProfilePictureUrl ?? "";
-                    accountType = currentUser.AccountType ?? "Individual"; // gets account type from the database which was in the register page
-                    
+                    accountType = currentUser.AccountType ?? "Individual";
+
                     languageDisplay = currentUser.PreferredLanguage switch
                     {
                         "sn" => "Shona",
@@ -1307,14 +1392,14 @@
             var file = e.File;
             var uploadsFolder = Path.Combine(Env.WebRootPath, "images", "avatars");
             Directory.CreateDirectory(uploadsFolder);
-            
+
             var fileName = $"{userId}_{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
             var filePath = Path.Combine(uploadsFolder, fileName);
-            
+
             using var stream = file.OpenReadStream(maxAllowedSize: 20971520);
             using var fs = new FileStream(filePath, FileMode.Create);
             await stream.CopyToAsync(fs);
-            
+
             Input.ProfilePictureUrl = $"/images/avatars/{fileName}";
         }
         finally
@@ -1326,7 +1411,7 @@
     private async Task SaveProfile()
     {
         if (currentUser == null) return;
-        
+
         isSaving = true;
 
         currentUser.DisplayName = Input.DisplayName;
@@ -1334,7 +1419,7 @@
         currentUser.Location = Input.Location;
         currentUser.ProfilePictureUrl = Input.ProfilePictureUrl;
         currentUser.SellerDescription = Input.SellerDescription;
-        
+
         bool languageChanged = currentUser.PreferredLanguage != Input.PreferredLanguageCode;
         currentUser.PreferredLanguage = Input.PreferredLanguageCode;
 
@@ -1343,7 +1428,7 @@
         if (result.Succeeded)
         {
             updateSuccess = true;
-            
+
             if (languageChanged)
             {
                 await JSRuntime.InvokeVoidAsync("setLanguageCookie", Input.PreferredLanguageCode);
@@ -1353,7 +1438,7 @@
 
             await LoadUserData();
         }
-        
+
         isSaving = false;
     }
 
