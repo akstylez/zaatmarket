@@ -1,34 +1,41 @@
-﻿using Microsoft.JSInterop;
+﻿using System;
+using System.Threading.Tasks;
+using Microsoft.JSInterop;
 
 namespace ZaatMarket.Services;
 
 public class CurrencyStateService
 {
+    private readonly CurrencyService _currencyService;
     private readonly IJSRuntime _jsRuntime;
 
-    // Default currency is USD
-    public string CurrentCurrency { get; private set; } = "USD";
+    // Original properties expected by ProductDetails.razor, Products.razor, and NavMenu.razor
+    public string TargetCurrency { get; private set; } = "USD";
+    public decimal CurrentExchangeRate { get; private set; } = 1.0m;
+    public bool IsLoadingRate { get; private set; } = false;
 
-    // Event triggered whenever the currency changes
+    // Backward-compatible alias expected by MainLayout.razor
+    public string CurrentCurrency => TargetCurrency;
+
     public event Action? OnCurrencyChanged;
 
-    public CurrencyStateService(IJSRuntime jsRuntime)
+    public CurrencyStateService(CurrencyService currencyService, IJSRuntime jsRuntime)
     {
+        _currencyService = currencyService;
         _jsRuntime = jsRuntime;
     }
 
     /// <summary>
-    /// Call this when the app loads to restore the user's saved currency preference.
+    /// Restores saved currency preference from browser localStorage on initial load.
     /// </summary>
     public async Task InitializeAsync()
     {
         try
         {
             var savedCurrency = await _jsRuntime.InvokeAsync<string>("localStorage.getItem", "zaat_currency");
-            if (!string.IsNullOrWhiteSpace(savedCurrency))
+            if (!string.IsNullOrWhiteSpace(savedCurrency) && savedCurrency != TargetCurrency)
             {
-                CurrentCurrency = savedCurrency;
-                NotifyStateChanged();
+                await UpdateCurrencyAsync(savedCurrency);
             }
         }
         catch
@@ -38,52 +45,67 @@ public class CurrencyStateService
     }
 
     /// <summary>
-    /// Updates the active currency, notifies all subscribed UI components, and caches the choice locally.
+    /// Fetches live exchange rates via CurrencyService and caches preference locally.
     /// </summary>
-    public async Task UpdateCurrencyAsync(string newCurrency)
+    public async Task UpdateCurrencyAsync(string newCurrencyCode)
     {
-        if (CurrentCurrency != newCurrency)
-        {
-            CurrentCurrency = newCurrency;
-            NotifyStateChanged();
+        if (TargetCurrency == newCurrencyCode) return;
 
+        IsLoadingRate = true;
+        NotifyStateChanged();
+
+        TargetCurrency = newCurrencyCode;
+
+        if (newCurrencyCode == "USD")
+        {
+            CurrentExchangeRate = 1.0m;
+        }
+        else
+        {
             try
             {
-                await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "zaat_currency", newCurrency);
+                var rate = await _currencyService.ConvertCurrencyAsync("USD", newCurrencyCode, 1.0m);
+                CurrentExchangeRate = rate ?? 1.0m;
             }
             catch
             {
-                // Silently ignore if localStorage is unavailable or restricted
+                CurrentExchangeRate = 1.0m; // Fallback to base rate if external API fails
             }
+        }
+
+        IsLoadingRate = false;
+        NotifyStateChanged();
+
+        try
+        {
+            await _jsRuntime.InvokeVoidAsync("localStorage.setItem", "zaat_currency", newCurrencyCode);
+        }
+        catch
+        {
+            // Silently ignore if localStorage is unavailable
         }
     }
 
-    /// <summary>
-    /// Helper: Converts a base USD price to the currently selected currency.
-    /// </summary>
-    public decimal Convert(decimal amountInUsd)
+    // Original method expected by ProductDetails.razor and Products.razor
+    public string FormatPrice(decimal baseUsdAmount)
     {
-        return CurrentCurrency switch
+        decimal convertedAmount = baseUsdAmount * CurrentExchangeRate;
+
+        return TargetCurrency switch
         {
-            "ZWG" => Math.Round(amountInUsd * 25.0m, 2), // Example ZWG/ZiG rate (adjust as needed)
-            "ZAR" => Math.Round(amountInUsd * 18.5m, 2), // Example ZAR rate
-            _ => Math.Round(amountInUsd, 2)
+            "ZAR" => $"R {convertedAmount:N2}",
+            "ZWG" => $"ZiG {convertedAmount:N2}",
+            "EUR" => $"€ {convertedAmount:N2}",
+            "GBP" => $"£ {convertedAmount:N2}",
+            "BWP" => $"P {convertedAmount:N2}",
+            _ => $"${convertedAmount:N2}"
         };
     }
 
-    /// <summary>
-    /// Helper: Returns a formatted price string with the correct currency symbol (e.g., "$10.00" or "ZiG 250.00").
-    /// </summary>
-    public string Format(decimal amountInUsd)
-    {
-        var converted = Convert(amountInUsd);
-        return CurrentCurrency switch
-        {
-            "ZWG" => $"ZiG {converted:N2}",
-            "ZAR" => $"R {converted:N2}",
-            _ => $"${converted:N2}"
-        };
-    }
+    // Backward-compatible alias for MainLayout.razor
+    public string Format(decimal baseUsdAmount) => FormatPrice(baseUsdAmount);
+
+    public decimal Convert(decimal amountInUsd) => Math.Round(amountInUsd * CurrentExchangeRate, 2);
 
     private void NotifyStateChanged() => OnCurrencyChanged?.Invoke();
 }
