@@ -2,8 +2,8 @@
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Hosting
-@inject IWebHostEnvironment Env
 @using System.Security.Claims
+@using System.Text.Json
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using ZaatMarket.Models
@@ -13,8 +13,10 @@
 @inject IDbContextFactory<ZaatMarket.Data.ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
+@inject IWebHostEnvironment Env
+@inject IJSRuntime JSRuntime
 
-<PageTitle>Sell an Item | Z-A-A-T-T</PageTitle>
+<PageTitle>Sell an Item | ZaatMarket</PageTitle>
 
 <div class="sell-page-wrapper">
     <div class="sell-container">
@@ -23,7 +25,7 @@
                 <h1 class="page-title">List a Product</h1>
                 <p class="page-subtitle">Add details, pricing, and inventory to publish to the marketplace.</p>
 
-                <div style="margin-top: 12px;">
+                <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
                     @if (accountType == "Business")
                     {
                         <span style="background: #1e293b; color: #ff6600; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #ff6600;">
@@ -35,6 +37,11 @@
                         <span style="background: #ffffff; color: #64748b; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #cbd5e1;">
                             👤 Listing as an Individual
                         </span>
+                    }
+
+                    @if (draftRestored)
+                    {
+                        <span class="draft-badge">✨ Draft restored from your last session</span>
                     }
                 </div>
             </div>
@@ -96,7 +103,7 @@
                                         <label for="fileUpload" class="upload-label-area">
                                             <span class="upload-icon">📤</span>
                                             <span class="upload-text">Click to upload an image</span>
-                                            <span class="upload-hint">JPG, PNG, WEBP, HEIC up to 10MB</span>
+                                            <span class="upload-hint">JPG, PNG, WEBP, HEIC (Auto-compressed to 1200px)</span>
                                         </label>
                                     }
                                 </div>
@@ -157,7 +164,6 @@
 </div>
 
 <style>
-    /* Modern Form Styling */
     .sell-page-wrapper {
         min-height: 100vh;
         background: #f8fafc;
@@ -189,6 +195,17 @@
         font-size: 1.05rem;
         color: #64748b;
         margin: 0;
+    }
+
+    .draft-badge {
+        background: #f0fdf4;
+        color: #166534;
+        border: 1px solid #bbf7d0;
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 600;
+        animation: fadeIn 0.3s ease-in;
     }
 
     .btn-ghost-header {
@@ -302,6 +319,7 @@
         transition: all 0.2s ease;
         background: white;
         font-family: inherit;
+        box-sizing: border-box;
     }
 
         .modern-input:focus {
@@ -476,6 +494,18 @@
         }
     }
 
+    @@keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(-4px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
     @@media (max-width: 900px) {
         .form-layout {
             grid-template-columns: 1fr;
@@ -509,6 +539,7 @@
     private string? previewUrl;
     private string? imageError;
     private bool saving;
+    private bool draftRestored = false;
     private string accountType = "Individual";
 
     protected override async Task OnInitializedAsync()
@@ -529,6 +560,56 @@
         }
     }
 
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try
+            {
+                // Restore cached draft from browser localStorage if available
+                var savedDraft = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "zaat_sell_draft");
+                if (!string.IsNullOrWhiteSpace(savedDraft))
+                {
+                    var draft = JsonSerializer.Deserialize<ProductDraftModel>(savedDraft);
+                    if (draft != null && (!string.IsNullOrWhiteSpace(draft.Title) || !string.IsNullOrWhiteSpace(draft.Description)))
+                    {
+                        model.Title = draft.Title ?? "";
+                        model.Description = draft.Description ?? "";
+                        model.Category = draft.Category ?? "";
+                        if (draft.Price > 0) model.Price = draft.Price;
+                        if (draft.StockQuantity > 0) model.StockQuantity = draft.StockQuantity;
+
+                        draftRestored = true;
+                        editContext.NotifyValidationStateChanged();
+                        StateHasChanged();
+                    }
+                }
+
+                // Automatically cache progress on every field change
+                editContext.OnFieldChanged += OnFieldChanged;
+            }
+            catch { /* Ignore JS runtime errors during prerendering */ }
+        }
+    }
+
+    private async void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        try
+        {
+            var draft = new ProductDraftModel
+            {
+                Title = model.Title,
+                Description = model.Description,
+                Category = model.Category,
+                Price = model.Price,
+                StockQuantity = model.StockQuantity
+            };
+            var json = JsonSerializer.Serialize(draft);
+            await JSRuntime.InvokeVoidAsync("localStorage.setItem", "zaat_sell_draft", json);
+        }
+        catch { /* Silently catch if circuit disconnects */ }
+    }
+
     private async Task OnFileSelected(InputFileChangeEventArgs e)
     {
         imageError = null;
@@ -537,7 +618,6 @@
 
         try
         {
-            // Instantly generate a smooth client-side preview thumbnail!
             var resizedImage = await e.File.RequestImageFileAsync(e.File.ContentType, 800, 800);
             using var stream = resizedImage.OpenReadStream(10 * 1024 * 1024);
             using var ms = new System.IO.MemoryStream();
@@ -548,7 +628,6 @@
         catch (Exception ex)
         {
             Console.WriteLine($"Preview creation warning: {ex.Message}");
-            // Even if the preview thumbnail fails, the actual selectedFile will still upload cleanly!
         }
     }
 
@@ -594,6 +673,9 @@
             db.Products.Add(model);
             await db.SaveChangesAsync();
 
+            // Clear the local storage draft after successful database save
+            try { await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "zaat_sell_draft"); } catch { }
+
             model = new Product { Price = 1, StockQuantity = 1 };
             editContext = new EditContext(model);
             selectedFile = null;
@@ -613,7 +695,7 @@
 
     private async Task<string?> SaveImageAsync(IBrowserFile file)
     {
-        const long maxSize = 10 * 1024 * 1024; // 10 MB
+        const long maxSize = 10 * 1024 * 1024; // 10 MB limit before compression
 
         if (file.Size > maxSize)
         {
@@ -628,29 +710,28 @@
             return null;
         }
 
-        var ext = Path.GetExtension(file.Name);
-        if (string.IsNullOrWhiteSpace(ext))
-        {
-            ext = file.ContentType.ToLower() switch
-            {
-                "image/jpeg" or "image/jpg" => ".jpg",
-                "image/png" => ".png",
-                "image/webp" => ".webp",
-                "image/heic" => ".heic",
-                _ => ".jpg"
-            };
-        }
+        // Refinement: Force resize and convert to lightweight max 1200x1200px JPEG before writing to server disk
+        var resizedFile = await file.RequestImageFileAsync("image/jpeg", 1200, 1200);
 
-        var fileName = $"{Guid.NewGuid():N}{ext}";
+        var fileName = $"{Guid.NewGuid():N}.jpg";
         var uploadsDir = Path.Combine(Env.WebRootPath, "uploads");
         Directory.CreateDirectory(uploadsDir);
 
         var fullPath = Path.Combine(uploadsDir, fileName);
 
-        await using var stream = file.OpenReadStream(maxSize);
+        await using var stream = resizedFile.OpenReadStream(maxSize);
         await using var fs = File.Create(fullPath);
         await stream.CopyToAsync(fs);
 
         return $"/uploads/{fileName}";
+    }
+
+    private sealed class ProductDraftModel
+    {
+        public string? Title { get; set; }
+        public string? Description { get; set; }
+        public string? Category { get; set; }
+        public decimal Price { get; set; }
+        public int StockQuantity { get; set; }
     }
 }

@@ -51,6 +51,10 @@ builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuth
 builder.Services.AddScoped<CurrencyService>();
 builder.Services.AddScoped<CurrencyStateService>();
 
+// toast service
+builder.Services.AddScoped<ZaatMarket.Services.ToastService>();
+builder.Services.AddScoped<ZaatMarket.Services.CurrencyStateService>();
+
 // Real-Time User Presence Tracker
 builder.Services.AddSingleton<PresenceService>();
 builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler, UserCircuitHandler>();

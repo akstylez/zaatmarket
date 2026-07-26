@@ -2,11 +2,23 @@
 @inject NavigationManager NavManager
 @inject ZaatMarket.Services.ICartService Cart
 @inject ZaatMarket.Services.CurrencyStateService CurrencyState
+@inject ZaatMarket.Services.ToastService ToastService
 @implements IDisposable
 
 <div id="progress-bar" class="@progressBarClass"></div>
 
 <div class="page-transition">
+    <!-- RESTORED: Top Utility Bar for Currency Switching -->
+    <div class="top-utility-bar">
+        <div class="utility-inner">
+            <span class="utility-text">💱 Currency:</span>
+            <select class="currency-selector" value="@CurrencyState.CurrentCurrency" @onchange="ChangeCurrency">
+                <option value="USD">USD ($)</option>
+                <option value="ZWG">ZWG (ZiG)</option>
+                <option value="ZAR">ZAR (R)</option>
+            </select>
+        </div>
+    </div>
 
     <NavMenu />
 
@@ -36,7 +48,6 @@
             <div class="footer-col">
                 <h4>Account</h4>
                 <ul>
-                    <!-- Fixed paths to /login and /account -->
                     <li><a href="/login" data-enhance-nav="false">Login / Register</a></li>
                     <li><a href="/my-listings">My Listings</a></li>
                     <li><a href="/messages">Messages</a></li>
@@ -56,9 +67,21 @@
         </div>
 
         <div class="footer-bottom">
-            &copy; @DateTime.Now.Year ZAATT Marketplace. All rights reserved.      Chemhanza High School
+            &copy; @DateTime.Now.Year ZAATT Marketplace. All rights reserved. &nbsp;|&nbsp; Chemhanza High School
         </div>
     </footer>
+</div>
+
+<!-- NEW: Global Floating Toast Container -->
+<div class="toast-container">
+    @foreach (var toast in ToastService.Messages)
+    {
+        <div class="toast-item toast-@toast.Type" @onclick="() => ToastService.Remove(toast)">
+            <span class="toast-icon">@toast.Icon</span>
+            <span class="toast-text">@toast.Message</span>
+            <button type="button" class="toast-close">✕</button>
+        </div>
+    }
 </div>
 
 <style>
@@ -86,6 +109,7 @@
         justify-content: flex-end;
         background-color: #0f172a;
         padding: 6px 20px;
+        border-bottom: 1px solid #1e293b;
     }
 
     .utility-inner {
@@ -119,23 +143,6 @@
             border-color: #ff6600;
         }
 
-    .rate-spinner {
-        font-size: 0.9rem;
-        animation: pulse 1s infinite ease-in-out;
-    }
-
-    @@keyframes pulse {
-        0%, 100% {
-            opacity: 0.4;
-            transform: scale(0.9);
-        }
-
-        50% {
-            opacity: 1;
-            transform: scale(1.2);
-        }
-    }
-
     /* --- Premium Progress Bar --- */
     #progress-bar {
         position: fixed;
@@ -160,6 +167,94 @@
             width: 100%;
             transition: width 0.2s ease-out;
         }
+
+    /* --- Global Toast Notifications --- */
+    .toast-container {
+        position: fixed;
+        bottom: 24px;
+        right: 24px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        max-width: 400px;
+        width: calc(100% - 48px);
+        pointer-events: none;
+    }
+
+    .toast-item {
+        pointer-events: auto;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 18px;
+        border-radius: 12px;
+        background: #ffffff;
+        box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+        border-left: 5px solid #3b82f6;
+        cursor: pointer;
+        animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        transition: transform 0.2s, opacity 0.2s;
+    }
+
+        .toast-item:hover {
+            transform: translateY(-2px);
+        }
+
+    .toast-success {
+        border-left-color: #10b981;
+        background: #f0fdf4;
+    }
+
+    .toast-error {
+        border-left-color: #ef4444;
+        background: #fef2f2;
+    }
+
+    .toast-warning {
+        border-left-color: #f59e0b;
+        background: #fffbeb;
+    }
+
+    .toast-info {
+        border-left-color: #3b82f6;
+        background: #eff6ff;
+    }
+
+    .toast-icon {
+        font-size: 1.25rem;
+        flex-shrink: 0;
+    }
+
+    .toast-text {
+        flex: 1;
+        font-size: 0.95rem;
+        font-weight: 600;
+        color: #0f172a;
+        line-height: 1.4;
+    }
+
+    .toast-close {
+        background: none;
+        border: none;
+        color: #64748b;
+        font-weight: bold;
+        cursor: pointer;
+        padding: 4px;
+        font-size: 0.9rem;
+    }
+
+    @@keyframes slideInRight {
+        from {
+            opacity: 0;
+            transform: translateX(100%);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
 
     /* --- Global Footer Styles --- */
     .site-footer {
@@ -229,7 +324,19 @@
     protected override void OnInitialized()
     {
         NavManager.LocationChanged += OnLocationChanged;
-        CurrencyState.OnCurrencyChanged += StateHasChanged;
+
+        // FIXED: Use thread-safe handler wrapper instead of subscribing StateHasChanged directly
+        CurrencyState.OnCurrencyChanged += HandleStateChanged;
+        ToastService.OnChange += HandleStateChanged;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Restores the user's currency preference from browser localStorage
+            await CurrencyState.InitializeAsync();
+        }
     }
 
     private async Task ChangeCurrency(ChangeEventArgs e)
@@ -237,7 +344,14 @@
         if (e.Value is string newCurrency)
         {
             await CurrencyState.UpdateCurrencyAsync(newCurrency);
+            ToastService.ShowInfo($"Currency switched to {newCurrency}");
         }
+    }
+
+    private void HandleStateChanged()
+    {
+        // FIXED: InvokeAsync ensures Blazor UI thread safety when async services trigger repaints
+        InvokeAsync(StateHasChanged);
     }
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
@@ -259,6 +373,7 @@
     public void Dispose()
     {
         NavManager.LocationChanged -= OnLocationChanged;
-        CurrencyState.OnCurrencyChanged -= StateHasChanged;
+        CurrencyState.OnCurrencyChanged -= HandleStateChanged;
+        ToastService.OnChange -= HandleStateChanged;
     }
 }

@@ -1393,10 +1393,13 @@
             var uploadsFolder = Path.Combine(Env.WebRootPath, "images", "avatars");
             Directory.CreateDirectory(uploadsFolder);
 
-            var fileName = $"{userId}_{Guid.NewGuid()}{Path.GetExtension(file.Name)}";
+            var fileName = $"{userId}_{Guid.NewGuid():N}.jpg";
             var filePath = Path.Combine(uploadsFolder, fileName);
 
-            using var stream = file.OpenReadStream(maxAllowedSize: 20971520);
+            // Refinement: Automatically compress and resize avatar photos to max 500x500px JPEG before saving
+            var resizedFile = await file.RequestImageFileAsync("image/jpeg", 500, 500);
+
+            using var stream = resizedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
             using var fs = new FileStream(filePath, FileMode.Create);
             await stream.CopyToAsync(fs);
 
@@ -1414,7 +1417,6 @@
 
         isSaving = true;
 
-        // Fetch a fresh, untracked instance directly via UserManager to avoid entity tracking conflicts
         var userToUpdate = await UserManager.FindByIdAsync(userId);
         if (userToUpdate == null)
         {

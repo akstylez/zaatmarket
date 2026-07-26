@@ -2,11 +2,12 @@
 @rendermode InteractiveServer
 @using System.Security.Claims
 @using Microsoft.EntityFrameworkCore
+@using ZaatMarket.Data
 @using ZaatMarket.Models
 @using Microsoft.AspNetCore.Authorization
 @attribute [Authorize]
 
-@inject ZaatMarket.Data.ApplicationDbContext Db
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
 
@@ -18,7 +19,7 @@
             <h1>My Listings</h1>
             <p>Manage your active inventory and products.</p>
         </div>
-        <button class="btn-primary" @onclick='() => Nav.NavigateTo("/sell")'>+ Sell New Item</button>
+        <button type="button" class="btn-primary" @onclick='() => Nav.NavigateTo("/sell")'>+ Sell New Item</button>
     </header>
 
     @if (items is null)
@@ -34,7 +35,7 @@
             <div class="empty-icon">📦</div>
             <h2>You haven't listed anything yet.</h2>
             <p>Start selling your items to reach thousands of local buyers.</p>
-            <button class="btn-primary mt-3" @onclick='() => Nav.NavigateTo("/sell")'>Create Your First Listing</button>
+            <button type="button" class="btn-primary mt-3" @onclick='() => Nav.NavigateTo("/sell")'>Create Your First Listing</button>
         </div>
     }
     else
@@ -60,16 +61,18 @@
                             <h3 class="card-title">@p.Title</h3>
                             <span class="card-price">@p.Price.ToString("C2")</span>
                         </div>
-                        
+
                         <p class="card-desc">@(string.IsNullOrWhiteSpace(p.Description) ? "No description provided." : (p.Description.Length > 60 ? p.Description.Substring(0, 60) + "..." : p.Description))</p>
-                        
+
                         <div class="card-footer">
                             <span class="stock-status @(p.StockQuantity > 0 ? "in-stock" : "out-of-stock")">
                                 @(p.StockQuantity > 0 ? $"{p.StockQuantity} in stock" : "Out of stock")
                             </span>
                             <div class="action-buttons">
                                 <a href="/edit-product/@p.Id" class="btn-outline-primary">Edit</a>
-                                <button @onclick="() => DeleteAsync(p.Id)" class="btn-outline-danger">Delete</button>
+                                <button type="button" @onclick="() => DeleteAsync(p.Id)" class="btn-outline-danger" disabled="@isDeleting(p.Id)">
+                                    @(deletingId == p.Id ? "Deleting..." : "Delete")
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -96,18 +99,18 @@
         gap: 16px;
     }
 
-    .page-header h1 {
-        margin: 0 0 8px 0;
-        font-size: 2rem;
-        color: #0f172a;
-        font-weight: 800;
-    }
+        .page-header h1 {
+            margin: 0 0 8px 0;
+            font-size: 2rem;
+            color: #0f172a;
+            font-weight: 800;
+        }
 
-    .page-header p {
-        margin: 0;
-        color: #64748b;
-        font-size: 1rem;
-    }
+        .page-header p {
+            margin: 0;
+            color: #64748b;
+            font-size: 1rem;
+        }
 
     /* Buttons */
     .btn-primary {
@@ -122,10 +125,10 @@
         transition: 0.2s;
     }
 
-    .btn-primary:hover {
-        background: #e65c00;
-        transform: translateY(-2px);
-    }
+        .btn-primary:hover {
+            background: #e65c00;
+            transform: translateY(-2px);
+        }
 
     .btn-outline-primary {
         background: transparent;
@@ -137,12 +140,15 @@
         font-size: 0.9rem;
         text-decoration: none;
         transition: 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
     }
 
-    .btn-outline-primary:hover {
-        background: #f8fafc;
-        border-color: #94a3b8;
-    }
+        .btn-outline-primary:hover {
+            background: #f8fafc;
+            border-color: #94a3b8;
+        }
 
     .btn-outline-danger {
         background: transparent;
@@ -156,11 +162,16 @@
         transition: 0.2s;
     }
 
-    .btn-outline-danger:hover {
-        background: #fef2f2;
-        color: #dc2626;
-        border-color: #ef4444;
-    }
+        .btn-outline-danger:hover:not(:disabled) {
+            background: #fef2f2;
+            color: #dc2626;
+            border-color: #ef4444;
+        }
+
+        .btn-outline-danger:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
 
     /* Grid Layout */
     .listings-grid {
@@ -181,10 +192,10 @@
         flex-direction: column;
     }
 
-    .listing-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
-    }
+        .listing-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
+        }
 
     .card-image-wrap {
         height: 200px;
@@ -274,8 +285,13 @@
         font-weight: 600;
     }
 
-    .stock-status.in-stock { color: #10b981; }
-    .stock-status.out-of-stock { color: #ef4444; }
+        .stock-status.in-stock {
+            color: #10b981;
+        }
+
+        .stock-status.out-of-stock {
+            color: #ef4444;
+        }
 
     .action-buttons {
         display: flex;
@@ -296,9 +312,19 @@
         margin-bottom: 16px;
     }
 
-    .empty-state h2 { color: #0f172a; margin: 0 0 8px 0; }
-    .empty-state p { color: #64748b; margin-bottom: 24px; }
-    .mt-3 { margin-top: 16px; }
+    .empty-state h2 {
+        color: #0f172a;
+        margin: 0 0 8px 0;
+    }
+
+    .empty-state p {
+        color: #64748b;
+        margin-bottom: 24px;
+    }
+
+    .mt-3 {
+        margin-top: 16px;
+    }
 
     .loading-state {
         display: flex;
@@ -319,21 +345,54 @@
         margin-bottom: 16px;
     }
 
-    @@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @@keyframes spin {
+        0% {
+            transform: rotate(0deg);
+        }
+
+        100% {
+            transform: rotate(360deg);
+        }
+    }
 
     /* Mobile adjustments */
     @@media (max-width: 600px) {
-        .listings-page { padding: 16px; }
-        .page-header { flex-direction: column; align-items: flex-start; }
-        .btn-primary { width: 100%; }
-        .card-footer { flex-direction: column; align-items: flex-start; gap: 16px; }
-        .action-buttons { width: 100%; display: grid; grid-template-columns: 1fr 1fr; }
-        .btn-outline-primary, .btn-outline-danger { text-align: center; }
+        .listings-page {
+            padding: 16px;
+        }
+
+        .page-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+
+        .btn-primary {
+            width: 100%;
+        }
+
+        .card-footer {
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 16px;
+        }
+
+        .action-buttons {
+            width: 100%;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+        }
+
+        .btn-outline-primary, .btn-outline-danger {
+            text-align: center;
+        }
     }
 </style>
 
 @code {
     private List<Product>? items;
+    private int? deletingId = null;
+
+    private bool isDeleting(int id) => deletingId == id;
 
     protected override async Task OnInitializedAsync()
     {
@@ -342,7 +401,10 @@
 
         if (!string.IsNullOrEmpty(userId))
         {
-            items = await Db.Products.AsNoTracking()
+            // Spawn an isolated context specifically for loading the inventory
+            using var db = await DbFactory.CreateDbContextAsync();
+
+            items = await db.Products.AsNoTracking()
                 .Where(p => p.OwnerUserId == userId)
                 .OrderByDescending(p => p.CreatedAtUtc)
                 .ToListAsync();
@@ -351,19 +413,34 @@
 
     private async Task DeleteAsync(int id)
     {
-        var item = await Db.Products.FindAsync(id);
-        if (item is null) return;
+        deletingId = id;
+        StateHasChanged();
 
-        var state = await AuthStateProvider.GetAuthenticationStateAsync();
-        var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        try
+        {
+            var state = await AuthStateProvider.GetAuthenticationStateAsync();
+            var userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
 
-        if (string.IsNullOrWhiteSpace(userId) || item.OwnerUserId != userId)
-            return;
+            if (string.IsNullOrWhiteSpace(userId)) return;
 
-        Db.Products.Remove(item);
-        await Db.SaveChangesAsync();
+            // Spawn a fresh context to perform the deletion cleanly without tracking collisions
+            using var db = await DbFactory.CreateDbContextAsync();
+            var item = await db.Products.FindAsync(id);
 
-        // Update the UI immediately by removing the deleted item from the list
-        items = items!.Where(x => x.Id != id).ToList();
+            if (item is null || item.OwnerUserId != userId) return;
+
+            db.Products.Remove(item);
+            await db.SaveChangesAsync();
+
+            // Update the UI immediately by removing the deleted item from the local list
+            if (items != null)
+            {
+                items = items.Where(x => x.Id != id).ToList();
+            }
+        }
+        finally
+        {
+            deletingId = null;
+        }
     }
 }
