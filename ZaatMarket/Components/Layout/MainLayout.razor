@@ -8,17 +8,6 @@
 <div id="progress-bar" class="@progressBarClass"></div>
 
 <div class="page-transition">
-    <div class="top-utility-bar">
-        <div class="utility-inner">
-            <span class="utility-text">💱 Currency:</span>
-            <select class="currency-selector" value="@CurrencyState.CurrentCurrency" @onchange="ChangeCurrency">
-                <option value="USD">USD ($)</option>
-                <option value="ZWG">ZWG (ZiG)</option>
-                <option value="ZAR">ZAR (R)</option>
-            </select>
-        </div>
-    </div>
-
     <NavMenu />
 
     <main class="main-content">
@@ -99,45 +88,6 @@
     .main-content {
         flex: 1;
     }
-
-    .top-utility-bar {
-        display: flex;
-        justify-content: flex-end;
-        background-color: #0f172a;
-        padding: 6px 20px;
-        border-bottom: 1px solid #1e293b;
-    }
-
-    .utility-inner {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-    }
-
-    .utility-text {
-        color: #94a3b8;
-        font-size: 0.8rem;
-        font-weight: 600;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-    }
-
-    .currency-selector {
-        padding: 4px 8px;
-        border-radius: 6px;
-        border: 1px solid #334155;
-        background-color: #1e293b;
-        font-weight: 600;
-        font-size: 0.85rem;
-        color: #f8fafc;
-        cursor: pointer;
-        outline: none;
-        transition: 0.2s;
-    }
-
-        .currency-selector:focus {
-            border-color: #ff6600;
-        }
 
     #progress-bar {
         position: fixed;
@@ -329,18 +279,9 @@
         }
     }
 
-    private async Task ChangeCurrency(ChangeEventArgs e)
-    {
-        if (e.Value is string newCurrency)
-        {
-            await CurrencyState.UpdateCurrencyAsync(newCurrency);
-            ToastService.ShowInfo($"Currency switched to {newCurrency}");
-        }
-    }
-
     private void HandleStateChanged()
     {
-        InvokeAsync(StateHasChanged);
+        _ = InvokeAsync(StateHasChanged);
     }
 
     private async void OnLocationChanged(object? sender, LocationChangedEventArgs e)
