@@ -37,7 +37,7 @@
                 </select>
                 @if (CurrencyState.IsLoadingRate)
                 {
-                    <span class="rate-spinner" title="Getting exchange exchange rates...">⚡</span>
+                    <span class="rate-spinner" title="Getting exchange rates...">⚡</span>
                 }
             </div>
 
@@ -91,7 +91,6 @@
         <NavLink class="sidebar-link" href="/zaatt-ai" @onclick="CloseSidebar" style="color: #6366f1; font-weight: bold;">✨ ZAATT AI</NavLink>
 
         <div class="sidebar-category">Account</div>
-        <!-- Fixed path back to /account -->
         <a class="sidebar-link" href="/account" data-enhance-nav="false" @onclick="CloseSidebar">👤 Profile & Settings</a>
 
         <div class="sidebar-category">Premium</div>

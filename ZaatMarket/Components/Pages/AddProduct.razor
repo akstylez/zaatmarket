@@ -1,4 +1,5 @@
 ﻿@page "/sell"
+@page "/add-product"
 @rendermode InteractiveServer
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Hosting
@@ -9,7 +10,6 @@
 @using ZaatMarket.Models
 @attribute [Authorize]
 
-@inject ZaatMarket.Data.ApplicationDbContext Db
 @inject IDbContextFactory<ZaatMarket.Data.ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
@@ -62,7 +62,7 @@
         }
 
         <div class="sell-card">
-            <EditForm EditContext="editContext" OnValidSubmit="SaveAsync">
+            <EditForm EditContext="editContext" OnValidSubmit="SaveAsync" FormName="add-product-form">
                 <DataAnnotationsValidator />
 
                 <div class="form-layout">
@@ -566,7 +566,6 @@
         {
             try
             {
-                // Restore cached draft from browser localStorage if available
                 var savedDraft = await JSRuntime.InvokeAsync<string>("localStorage.getItem", "zaat_sell_draft");
                 if (!string.IsNullOrWhiteSpace(savedDraft))
                 {
@@ -585,10 +584,9 @@
                     }
                 }
 
-                // Automatically cache progress on every field change
                 editContext.OnFieldChanged += OnFieldChanged;
             }
-            catch { /* Ignore JS runtime errors during prerendering */ }
+            catch { }
         }
     }
 
@@ -607,7 +605,7 @@
             var json = JsonSerializer.Serialize(draft);
             await JSRuntime.InvokeVoidAsync("localStorage.setItem", "zaat_sell_draft", json);
         }
-        catch { /* Silently catch if circuit disconnects */ }
+        catch { }
     }
 
     private async Task OnFileSelected(InputFileChangeEventArgs e)
@@ -673,7 +671,6 @@
             db.Products.Add(model);
             await db.SaveChangesAsync();
 
-            // Clear the local storage draft after successful database save
             try { await JSRuntime.InvokeVoidAsync("localStorage.removeItem", "zaat_sell_draft"); } catch { }
 
             model = new Product { Price = 1, StockQuantity = 1 };
@@ -695,7 +692,7 @@
 
     private async Task<string?> SaveImageAsync(IBrowserFile file)
     {
-        const long maxSize = 10 * 1024 * 1024; // 10 MB limit before compression
+        const long maxSize = 10 * 1024 * 1024;
 
         if (file.Size > maxSize)
         {
@@ -710,7 +707,6 @@
             return null;
         }
 
-        // Refinement: Force resize and convert to lightweight max 1200x1200px JPEG before writing to server disk
         var resizedFile = await file.RequestImageFileAsync("image/jpeg", 1200, 1200);
 
         var fileName = $"{Guid.NewGuid():N}.jpg";

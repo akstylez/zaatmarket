@@ -10,7 +10,7 @@
 @using ZaatMarket.Services
 @using ZaatMarket.Data
 
-@inject ApplicationDbContext Db
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject EmailSender EmailService
@@ -19,7 +19,7 @@
 @inject CurrencyStateService CurrencyState
 @implements IDisposable
 
-<PageTitle>@(product?.Title ?? "Loading...") | Z-A-A-T-T</PageTitle>
+<PageTitle>@(product?.Title ?? "Loading...") | ZaatMarket</PageTitle>
 
 <div class="product-page-container">
 
@@ -241,7 +241,6 @@
         min-height: 80vh;
     }
 
-    /* States */
     .state-container {
         display: flex;
         flex-direction: column;
@@ -272,7 +271,6 @@
         margin-bottom: 16px;
     }
 
-    /* Grid Layout */
     .details-grid {
         display: grid;
         grid-template-columns: 1fr 1fr;
@@ -280,7 +278,6 @@
         align-items: start;
     }
 
-    /* Left Column (Sticky Image) */
     .details-left {
         position: sticky;
         top: 40px;
@@ -320,7 +317,6 @@
             margin-bottom: 10px;
         }
 
-    /* Right Column (Info) */
     .bread-crumbs {
         color: #64748b;
         font-size: 0.9rem;
@@ -365,7 +361,6 @@
         color: #ff6600;
     }
 
-    /* Stock Badges */
     .stock-badge {
         display: flex;
         align-items: center;
@@ -423,7 +418,6 @@
         white-space: pre-line;
     }
 
-    /* Action Panel */
     .action-panel {
         background: #f8fafc;
         padding: 24px;
@@ -776,26 +770,32 @@
         userId = state.User.FindFirstValue(ClaimTypes.NameIdentifier);
         isLoggedIn = !string.IsNullOrWhiteSpace(userId);
 
-        // OPTIMIZATION 1: Use AsNoTracking() for up to 40% faster product lookup
-        product = await Db.Products
+        using var db = await DbFactory.CreateDbContextAsync();
+        product = await db.Products
             .AsNoTracking()
             .FirstOrDefaultAsync(p => p.Id == Id);
 
         if (product is not null)
         {
-            // OPTIMIZATION 2: Execute Seller and Reviews queries concurrently over the network!
-            // OPTIMIZATION 3: Use .Select() projection to fetch ONLY display fields, ignoring heavy user tokens/hashes.
-            var sellerTask = Db.Users
-                .AsNoTracking()
-                .Where(u => u.Id == product.OwnerUserId)
-                .Select(u => new { u.DisplayName, u.UserName, u.AccountType, u.SellerDescription })
-                .FirstOrDefaultAsync();
+            var sellerTask = Task.Run(async () =>
+            {
+                using var sellerDb = await DbFactory.CreateDbContextAsync();
+                return await sellerDb.Users
+                    .AsNoTracking()
+                    .Where(u => u.Id == product.OwnerUserId)
+                    .Select(u => new { u.DisplayName, u.UserName, u.AccountType, u.SellerDescription })
+                    .FirstOrDefaultAsync();
+            });
 
-            var reviewsTask = Db.Reviews
-                .AsNoTracking()
-                .Where(r => r.ProductId == Id)
-                .OrderByDescending(r => r.CreatedAtUtc)
-                .ToListAsync();
+            var reviewsTask = Task.Run(async () =>
+            {
+                using var reviewsDb = await DbFactory.CreateDbContextAsync();
+                return await reviewsDb.Reviews
+                    .AsNoTracking()
+                    .Where(r => r.ProductId == Id)
+                    .OrderByDescending(r => r.CreatedAtUtc)
+                    .ToListAsync();
+            });
 
             await Task.WhenAll(sellerTask, reviewsTask);
 
@@ -836,7 +836,6 @@
             showCartSuccess = true;
             StateHasChanged();
 
-            // Non-blocking fire-and-forget UI timer
             _ = Task.Run(async () =>
             {
                 await Task.Delay(2500);
@@ -878,8 +877,9 @@
             UserId = userId!
         };
 
-        Db.Reviews.Add(rev);
-        await Db.SaveChangesAsync();
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Reviews.Add(rev);
+        await db.SaveChangesAsync();
 
         reviews.Insert(0, rev);
         avgRating = (decimal)reviews.Average(r => r.Rating);
