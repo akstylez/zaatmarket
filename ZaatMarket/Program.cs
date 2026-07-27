@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.AspNetCore.HttpOverrides; // --> CRITICAL HTTPS PROXY FIX: Required for ForwardedHeaders
+using Microsoft.AspNetCore.HttpOverrides;
 using ZaatMarket.Components;
 using ZaatMarket.Components.Account;
 using ZaatMarket.Data;
@@ -39,12 +39,9 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
 
-// --> CRITICAL HTTPS PROXY FIX: Tell ASP.NET Core to trust headers from reverse proxies (Nginx, IIS, Cloudflare)
-// This forces Google OAuth to generate 'https://' callback URLs instead of 'http://' in production.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    // Clearing networks/proxies allows this to work reliably across Linux Nginx, Docker, and Cloudflare deployments
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
@@ -89,6 +86,9 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     options.SignIn.RequireConfirmedAccount = false;
     options.SignIn.RequireConfirmedEmail = false;
     options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
+
+    // Enforce unique emails to block duplicate database record exceptions
+    options.User.RequireUniqueEmail = true;
 })
     .AddEntityFrameworkStores<ApplicationDbContext>()
     .AddSignInManager()
@@ -119,7 +119,6 @@ var app = builder.Build();
 // ==========================================
 // 6. HTTP REQUEST PIPELINE
 // ==========================================
-// --> CRITICAL HTTPS PROXY FIX: This MUST be at the very top of the request pipeline!
 app.UseForwardedHeaders();
 
 if (app.Environment.IsDevelopment())
@@ -135,7 +134,6 @@ else
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
 app.UseHttpsRedirection();
 
-// CRITICAL FIX: UseStaticFiles must be called before MapStaticAssets to serve runtime uploaded images!
 app.UseStaticFiles();
 app.MapStaticAssets();
 
@@ -146,7 +144,6 @@ app.UseAntiforgery();
 // ==========================================
 // 7. MINIMAL API ENDPOINTS
 // ==========================================
-// Optional logout helper
 app.MapGet("/auth/logout", async (HttpContext http) =>
 {
     await http.SignOutAsync(IdentityConstants.ApplicationScheme);
@@ -157,7 +154,6 @@ app.MapGet("/auth/logout", async (HttpContext http) =>
     return Results.Redirect("/");
 });
 
-// Start Paynow payment
 app.MapPost("/api/paynow/start", async (
     PaynowService paynowService,
     PaynowStartRequest request) =>
@@ -184,7 +180,6 @@ app.MapPost("/api/paynow/start", async (
         : Results.BadRequest(result);
 });
 
-// Paynow result webhook callback
 app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore store) =>
 {
     var form = await request.ReadFormAsync();
@@ -214,14 +209,12 @@ app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore
     return Results.Ok();
 });
 
-// Check payment status
 app.MapGet("/api/paynow/status/{reference}", async (string reference, PaynowService paynowService) =>
 {
     var result = await paynowService.CheckStatusAsync(reference);
     return result.Found ? Results.Ok(result) : Results.NotFound(result);
 });
 
-// Return URL target
 app.MapGet("/payment-return", (HttpRequest request) =>
 {
     var reference = request.Query["reference"].ToString();
@@ -241,7 +234,7 @@ app.MapRazorComponents<App>()
 app.MapAdditionalIdentityEndpoints();
 
 // ==========================================
-// 9. AUTOMATIC DATABASE MIGRATIONS ON STARTUP
+// 9. SUPABASE DATABASE RESET & WIPE ON STARTUP
 // ==========================================
 using (var scope = app.Services.CreateScope())
 {
@@ -250,12 +243,15 @@ using (var scope = app.Services.CreateScope())
     {
         var factory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         using var context = factory.CreateDbContext();
+
+        // COMPLETELY WIPE SUPABASE DATABASE & RECREATE FROM SCRATCH:
+        context.Database.EnsureDeleted();
         context.Database.Migrate();
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the database.");
+        logger.LogError(ex, "An error occurred while resetting and migrating the Supabase database.");
     }
 }
 
