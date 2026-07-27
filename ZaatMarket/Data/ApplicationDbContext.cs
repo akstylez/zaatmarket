@@ -21,21 +21,31 @@ public class ApplicationDbContext : IdentityDbContext<ApplicationUser>
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
- 
         base.OnModelCreating(builder);
 
-
+        // --- Existing Message Foreign Key Rules ---
         builder.Entity<Message>()
             .HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(m => m.SenderId)
             .OnDelete(DeleteBehavior.NoAction);
 
-
         builder.Entity<Message>()
             .HasOne<ApplicationUser>()
             .WithMany()
             .HasForeignKey(m => m.ReceiverId)
             .OnDelete(DeleteBehavior.NoAction);
+
+        // --- NEW: Performance & Query Optimization Indexes ---
+
+        // Creates a composite index optimized for loading product reviews sorted by newest first
+        builder.Entity<Review>()
+            .HasIndex(r => new { r.ProductId, r.CreatedAtUtc })
+            .HasDatabaseName("IX_Reviews_ProductId_CreatedAtUtc");
+
+        // Optimizes category filtering and marketplace product browsing
+        builder.Entity<Product>()
+            .HasIndex(p => p.Category)
+            .HasDatabaseName("IX_Products_Category");
     }
 }

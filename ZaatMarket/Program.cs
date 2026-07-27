@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.Diagnostics;
 using ZaatMarket.Components;
 using ZaatMarket.Components.Account;
 using ZaatMarket.Data;
+using ZaatMarket.Models;
 using ZaatMarket.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -17,8 +18,7 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// The correct, native way for Blazor Server + EF Core: Register ONLY the factory. 
-// This safely handles both background services and component database creation without DI scope clashes.
+// Registering the DbContextFactory safely handles background services and component database creation without DI scope clashes.
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
@@ -47,13 +47,10 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IdentityRedirectManager>();
 builder.Services.AddScoped<AuthenticationStateProvider, IdentityRevalidatingAuthenticationStateProvider>();
 
-// Currency & Pricing Engines
+// Currency, Pricing & UI Notification Engines
 builder.Services.AddScoped<CurrencyService>();
 builder.Services.AddScoped<CurrencyStateService>();
-
-// toast service
-builder.Services.AddScoped<ZaatMarket.Services.ToastService>();
-builder.Services.AddScoped<ZaatMarket.Services.CurrencyStateService>();
+builder.Services.AddScoped<ToastService>();
 
 // Real-Time User Presence Tracker
 builder.Services.AddSingleton<PresenceService>();
@@ -97,7 +94,6 @@ var auth = builder.Services.AddAuthentication(options =>
 });
 
 auth.AddIdentityCookies();
-
 auth.AddGoogle(options =>
 {
     options.ClientId = builder.Configuration["Authentication:Google:ClientId"]
