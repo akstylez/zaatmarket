@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.UI.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.AspNetCore.HttpOverrides; // --> CRITICAL HTTPS PROXY FIX: Required for ForwardedHeaders
 using ZaatMarket.Components;
 using ZaatMarket.Components.Account;
 using ZaatMarket.Data;
@@ -18,7 +19,6 @@ var builder = WebApplication.CreateBuilder(args);
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
     ?? throw new InvalidOperationException("Connection string 'DefaultConnection' not found.");
 
-// Registering the DbContextFactory safely handles background services and component database creation without DI scope clashes.
 builder.Services.AddDbContextFactory<ApplicationDbContext>(options =>
     options.UseNpgsql(connectionString)
            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning)));
@@ -28,7 +28,6 @@ builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 // ==========================================
 // 2. BLAZOR & SIGNALR (WEB SOCKETS)
 // ==========================================
-// Added AddHubOptions to allow very large audio/video file uploads (50 MB limit)
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddHubOptions(options =>
@@ -39,6 +38,16 @@ builder.Services.AddRazorComponents()
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
+
+// --> CRITICAL HTTPS PROXY FIX: Tell ASP.NET Core to trust headers from reverse proxies (Nginx, IIS, Cloudflare)
+// This forces Google OAuth to generate 'https://' callback URLs instead of 'http://' in production.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    // Clearing networks/proxies allows this to work reliably across Linux Nginx, Docker, and Cloudflare deployments
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 // ==========================================
 // 3. APPLICATION & CUSTOM SERVICES
@@ -110,6 +119,9 @@ var app = builder.Build();
 // ==========================================
 // 6. HTTP REQUEST PIPELINE
 // ==========================================
+// --> CRITICAL HTTPS PROXY FIX: This MUST be at the very top of the request pipeline!
+app.UseForwardedHeaders();
+
 if (app.Environment.IsDevelopment())
 {
     app.UseMigrationsEndPoint();
@@ -236,7 +248,6 @@ using (var scope = app.Services.CreateScope())
     var services = scope.ServiceProvider;
     try
     {
-        // Safely resolve via IDbContextFactory to guarantee thread-safe startup migrations
         var factory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         using var context = factory.CreateDbContext();
         context.Database.Migrate();
