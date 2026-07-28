@@ -1,6 +1,7 @@
 ﻿@page "/sell"
 @page "/add-product"
 @rendermode InteractiveServer
+@implements IDisposable
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Hosting
 @using System.Security.Claims
@@ -15,6 +16,7 @@
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
 @inject IJSRuntime JSRuntime
+@inject ZaatMarket.Services.SupabaseStorageService StorageService
 
 <PageTitle>Sell an Item | ZaatMarket</PageTitle>
 
@@ -590,7 +592,12 @@
         }
     }
 
-    private async void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    private void OnFieldChanged(object? sender, FieldChangedEventArgs e)
+    {
+        _ = SaveDraftQuietly();
+    }
+
+    private async Task SaveDraftQuietly()
     {
         try
         {
@@ -617,7 +624,7 @@
         try
         {
             var resizedImage = await e.File.RequestImageFileAsync(e.File.ContentType, 800, 800);
-            using var stream = resizedImage.OpenReadStream(10 * 1024 * 1024);
+            await using var stream = resizedImage.OpenReadStream(10 * 1024 * 1024);
             using var ms = new System.IO.MemoryStream();
             await stream.CopyToAsync(ms);
 
@@ -692,7 +699,7 @@
 
     private async Task<string?> SaveImageAsync(IBrowserFile file)
     {
-        const long maxSize = 10 * 1024 * 1024;
+        const long maxSize = 10 * 1024 * 1024; // 10MB limit
 
         if (file.Size > maxSize)
         {
@@ -708,18 +715,26 @@
         }
 
         var resizedFile = await file.RequestImageFileAsync("image/jpeg", 1200, 1200);
-
-        var fileName = $"{Guid.NewGuid():N}.jpg";
-        var uploadsDir = Path.Combine(Env.WebRootPath, "uploads");
-        Directory.CreateDirectory(uploadsDir);
-
-        var fullPath = Path.Combine(uploadsDir, fileName);
+        var fileName = $"prod_{Guid.NewGuid():N}.jpg";
 
         await using var stream = resizedFile.OpenReadStream(maxSize);
-        await using var fs = File.Create(fullPath);
-        await stream.CopyToAsync(fs);
 
-        return $"/uploads/{fileName}";
+        var publicUrl = await StorageService.UploadImageAsync(stream, fileName, "image/jpeg");
+
+        if (publicUrl == null)
+        {
+            imageError = "Failed to upload image to cloud storage. Check your Supabase credentials.";
+        }
+
+        return publicUrl;
+    }
+
+    public void Dispose()
+    {
+        if (editContext != null)
+        {
+            editContext.OnFieldChanged -= OnFieldChanged;
+        }
     }
 
     private sealed class ProductDraftModel

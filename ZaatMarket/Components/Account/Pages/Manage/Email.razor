@@ -16,7 +16,14 @@
 
 <h3>Manage email</h3>
 
-<StatusMessage Message="@message" />
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    var alertClass = message.StartsWith("Error") ? "alert-danger" : "alert-success";
+    <div class="alert @alertClass alert-dismissible fade show mb-3" role="alert">
+        @message
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+}
 
 <div class="row">
     <div class="col-xl-6">
@@ -115,8 +122,9 @@
             await EmailSender.SendConfirmationLinkAsync(user, Input.NewEmail, HtmlEncoder.Default.Encode(callbackUrl));
             message = "Confirmation link to change email sent. Please check your email.";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.WriteLine($"SMTP Send Error: {ex.Message}");
             message = "Error sending confirmation email. Please check your SMTP settings.";
         }
     }
@@ -146,8 +154,9 @@
             await EmailSender.SendConfirmationLinkAsync(user, email, HtmlEncoder.Default.Encode(callbackUrl));
             message = "Verification email sent. Please check your email.";
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            Console.WriteLine($"SMTP Send Error: {ex.Message}");
             message = "Error sending verification email. Please check your SMTP settings.";
         }
     }

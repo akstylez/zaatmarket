@@ -20,6 +20,7 @@
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
 @inject IJSRuntime JSRuntime
+@inject ZaatMarket.Services.SupabaseStorageService StorageService
 
 <PageTitle>Account Center - ZaatMarket</PageTitle>
 
@@ -281,7 +282,7 @@
                                     <label for="avatarUpload" class="btn-outline">Choose Image</label>
                                     @if (isUploading)
                                     {
-                                        <span class="uploading-text">Uploading...</span>
+                                        <span class="uploading-text">Uploading to Cloud...</span>
                                     }
                                 </div>
                             </div>
@@ -296,7 +297,7 @@
                                 <div class="form-group">
                                     <label class="form-label">Display Name / Username</label>
                                     <InputText @bind-Value="Input.DisplayName" class="form-control" placeholder="e.g. AwesomeSeller99" />
-                                    <ValidationMessage For="() => Input!.DisplayName" class="validation-msg" />
+                                    <ValidationMessage For="@(() => Input.DisplayName)" class="validation-msg" />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">Location (City, Country)</label>
@@ -1367,22 +1368,25 @@
     {
         if (Input == null) return;
         isUploading = true;
+
         try
         {
             var file = e.File;
-            var uploadsFolder = Path.Combine(Env.WebRootPath, "images", "avatars");
-            Directory.CreateDirectory(uploadsFolder);
-
-            var fileName = $"{userId}_{Guid.NewGuid():N}.jpg";
-            var filePath = Path.Combine(uploadsFolder, fileName);
-
             var resizedFile = await file.RequestImageFileAsync("image/jpeg", 500, 500);
+            var fileName = $"avatar_{userId}_{Guid.NewGuid():N}.jpg";
 
-            using var stream = resizedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
-            using var fs = new FileStream(filePath, FileMode.Create);
-            await stream.CopyToAsync(fs);
+            await using var stream = resizedFile.OpenReadStream(maxAllowedSize: 5 * 1024 * 1024);
 
-            Input.ProfilePictureUrl = $"/images/avatars/{fileName}";
+            var publicUrl = await StorageService.UploadImageAsync(stream, fileName, "image/jpeg");
+
+            if (publicUrl != null)
+            {
+                Input.ProfilePictureUrl = publicUrl;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Avatar upload error: {ex.Message}");
         }
         finally
         {

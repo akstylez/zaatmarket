@@ -66,6 +66,9 @@ builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.Circu
 // ZAATT AI Live Service
 builder.Services.AddHttpClient<ZaattAiService>();
 
+// Supabase Cloud Image Storage Service
+builder.Services.AddHttpClient<SupabaseStorageService>();
+
 // ==========================================
 // 4. EXTERNAL INTEGRATIONS (EMAIL & PAYNOW)
 // ==========================================
