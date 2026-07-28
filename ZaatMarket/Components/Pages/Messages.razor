@@ -16,7 +16,7 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
 @inject EmailSender EmailService
-@inject ApplicationDbContext Db
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
 @inject IJSRuntime JSRuntime
@@ -24,7 +24,6 @@
 <PageTitle>Chat Center | Z-A-A-T-T</PageTitle>
 
 <div class="chat-container">
-    
     <aside class="chat-sidebar">
         <div class="sidebar-header">
             <h2>Messages</h2>
@@ -115,7 +114,6 @@
                 {
                     <div class="bubble-wrapper @(msg.SenderId == currentUserId ? "mine" : "theirs")">
                         <div class="chat-bubble">
-                            
                             @if (msg.MessageType == "Text" || string.IsNullOrEmpty(msg.MessageType))
                             {
                                 <p>@msg.Content</p>
@@ -270,7 +268,6 @@
     .header-user-info { display: flex; align-items: center; gap: 15px; }
     .header-text h3 { margin: 0; font-size: 1.15rem; color: #0f172a; }
     
-    /* NEW: Online Status Classes */
     .status.online { color: #10b981; font-weight: 700; font-size: 0.8rem; }
     .status.offline { color: #64748b; font-size: 0.8rem; }
     
@@ -292,7 +289,6 @@
     .chat-media-audio { width: 250px; height: 40px; margin: 5px 0; }
     .media-caption { font-size: 0.9rem; margin-top: 4px; }
 
-    /* NEW: WhatsApp Tick CSS */
     .msg-footer { display: flex; align-items: center; justify-content: flex-end; gap: 6px; margin-top: 4px; }
     .bubble-wrapper.mine .timestamp { color: rgba(255,255,255,0.7); }
     .bubble-wrapper.theirs .timestamp { color: #94a3b8; }
@@ -357,7 +353,6 @@
     [SupplyParameterFromQuery(Name = "product")]
     public string? QueryProductName { get; set; }
     
-    // modal state
     private bool showProfileModal = false;
     private ApplicationUser? selectedUserProfile = null;
 
@@ -370,7 +365,7 @@
         public string LastMessagePreview { get; set; } = "";
         public string LastMessageTime { get; set; } = "";
         public bool HasUnread { get; set; }
-        public DateTime LastSeen { get; set; } // NEW: Tracks last seen time
+        public DateTime LastSeen { get; set; }
     }
 
     private List<ContactPreview> activeContacts = new();
@@ -378,7 +373,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Subscribe to real-time presence events
         PresenceTracker.OnPresenceChanged += RefreshUI;
 
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
@@ -392,12 +386,13 @@
             {
                 if (!activeContacts.Any(c => c.UserId == QueryUserId))
                 {
-                    var newUser = await Db.Users.FirstOrDefaultAsync(u => u.Id == QueryUserId);
+                    using var db = await DbFactory.CreateDbContextAsync();
+                    var newUser = await db.Users.FirstOrDefaultAsync(u => u.Id == QueryUserId);
                     if (newUser != null)
                     {
                         string displayUsername = !string.IsNullOrWhiteSpace(newUser.DisplayName) 
-                                                    ? newUser.DisplayName 
-                                                    : (newUser.UserName ?? "User");
+                                                ? newUser.DisplayName 
+                                                : (newUser.UserName ?? "User");
 
                         activeContacts.Insert(0, new ContactPreview {
                             UserId = newUser.Id,
@@ -429,7 +424,9 @@
 
     private async Task LoadContactsAsync()
     {
-        var allMyMessages = await Db.Messages
+        using var db = await DbFactory.CreateDbContextAsync();
+
+        var allMyMessages = await db.Messages
             .Where(m => m.SenderId == currentUserId || m.ReceiverId == currentUserId)
             .OrderByDescending(m => m.SentAtUtc)
             .ToListAsync();
@@ -439,7 +436,7 @@
             .Distinct()
             .ToList();
 
-        var users = await Db.Users
+        var users = await db.Users
             .Where(u => uniqueContactIds.Contains(u.Id))
             .ToListAsync();
 
@@ -453,8 +450,8 @@
                 (m.SenderId == id && m.ReceiverId == currentUserId));
             
             string displayUsername = !string.IsNullOrWhiteSpace(otherUser?.DisplayName) 
-                                        ? otherUser.DisplayName 
-                                        : (otherUser?.UserName ?? "User");
+                                    ? otherUser.DisplayName 
+                                    : (otherUser?.UserName ?? "User");
             
             string preview = lastMsg.MessageType == "Image" ? "📷 Image" : 
                              lastMsg.MessageType == "Video" ? "🎥 Video" : 
@@ -478,7 +475,9 @@
     {
         selectedContactId = contactId;
         
-        chatHistory = await Db.Messages
+        using var db = await DbFactory.CreateDbContextAsync();
+        
+        chatHistory = await db.Messages
             .Where(m => (m.SenderId == currentUserId && m.ReceiverId == contactId) || 
                         (m.SenderId == contactId && m.ReceiverId == currentUserId))
             .OrderBy(m => m.SentAtUtc)
@@ -491,7 +490,7 @@
             {
                 msg.IsRead = true;
             }
-            await Db.SaveChangesAsync();
+            await db.SaveChangesAsync();
             
             var contact = activeContacts.FirstOrDefault(c => c.UserId == contactId);
             if (contact != null) contact.HasUnread = false;
@@ -504,7 +503,8 @@
     {
         if (!string.IsNullOrEmpty(selectedContactId))
         {
-            selectedUserProfile = await Db.Users.FirstOrDefaultAsync(u => u.Id == selectedContactId);
+            using var db = await DbFactory.CreateDbContextAsync();
+            selectedUserProfile = await db.Users.FirstOrDefaultAsync(u => u.Id == selectedContactId);
             if (selectedUserProfile != null)
             {
                 showProfileModal = true;
@@ -542,8 +542,9 @@
             IsRead = false 
         };
 
-        Db.Messages.Add(msg);
-        await Db.SaveChangesAsync();
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Messages.Add(msg);
+        await db.SaveChangesAsync();
 
         chatHistory.Add(msg);
         newMessage = "";
@@ -580,8 +581,9 @@
             IsRead = false 
         };
 
-        Db.Messages.Add(msg);
-        await Db.SaveChangesAsync();
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Messages.Add(msg);
+        await db.SaveChangesAsync();
         
         chatHistory.Add(msg);
         await LoadContactsAsync();
@@ -632,8 +634,9 @@
             IsRead = false
         };
 
-        Db.Messages.Add(msg);
-        await Db.SaveChangesAsync();
+        using var db = await DbFactory.CreateDbContextAsync();
+        db.Messages.Add(msg);
+        await db.SaveChangesAsync();
         
         chatHistory.Add(msg);
         StateHasChanged();
@@ -644,14 +647,15 @@
 
     private async Task NotifyReceiverOffline(string receiverId, string contentPreview)
     {
-        var receiver = await Db.Users.FindAsync(receiverId);
+        using var db = await DbFactory.CreateDbContextAsync();
+        var receiver = await db.Users.FindAsync(receiverId);
         if (receiver != null && !string.IsNullOrWhiteSpace(receiver.Email))
         {
             var authState = await AuthStateProvider.GetAuthenticationStateAsync();
             var currentUser = await UserManager.GetUserAsync(authState.User);
             var senderName = !string.IsNullOrWhiteSpace(currentUser?.DisplayName) 
-                                ? currentUser.DisplayName 
-                                : (currentUser?.UserName ?? "A user");
+                                    ? currentUser.DisplayName 
+                                    : (currentUser?.UserName ?? "A user");
             try
             {
                 await EmailService.SendOfflineChatNotificationAsync(receiver.Email, senderName, contentPreview);
@@ -674,7 +678,6 @@
 
     public void Dispose()
     {
-        // Prevent memory leaks when the component is destroyed
         PresenceTracker.OnPresenceChanged -= RefreshUI;
     }
 }
