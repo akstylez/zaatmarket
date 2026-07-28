@@ -16,7 +16,8 @@
 
 <h3>Manage email</h3>
 
-<StatusMessage Message="@message"/>
+<StatusMessage Message="@message" />
+
 <div class="row">
     <div class="col-xl-6">
         <form @onsubmit="OnSendEmailVerificationAsync" @formname="send-verification" id="send-verification-form" method="post">
@@ -69,10 +70,16 @@
     {
         Input ??= new();
 
+        if (HttpContext?.User is null)
+        {
+            RedirectManager.RedirectTo("Account/Login");
+            return;
+        }
+
         user = await UserManager.GetUserAsync(HttpContext.User);
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectTo("Account/Login");
             return;
         }
 
@@ -92,7 +99,7 @@
 
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectTo("Account/Login");
             return;
         }
 
@@ -103,9 +110,15 @@
             NavigationManager.ToAbsoluteUri("Account/ConfirmEmailChange").AbsoluteUri,
             new Dictionary<string, object?> { ["userId"] = userId, ["email"] = Input.NewEmail, ["code"] = code });
 
-        await EmailSender.SendConfirmationLinkAsync(user, Input.NewEmail, HtmlEncoder.Default.Encode(callbackUrl));
-
-        message = "Confirmation link to change email sent. Please check your email.";
+        try
+        {
+            await EmailSender.SendConfirmationLinkAsync(user, Input.NewEmail, HtmlEncoder.Default.Encode(callbackUrl));
+            message = "Confirmation link to change email sent. Please check your email.";
+        }
+        catch (Exception)
+        {
+            message = "Error sending confirmation email. Please check your SMTP settings.";
+        }
     }
 
     private async Task OnSendEmailVerificationAsync()
@@ -117,7 +130,7 @@
 
         if (user is null)
         {
-            RedirectManager.RedirectToInvalidUser(UserManager, HttpContext);
+            RedirectManager.RedirectTo("Account/Login");
             return;
         }
 
@@ -128,9 +141,15 @@
             NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
             new Dictionary<string, object?> { ["userId"] = userId, ["code"] = code });
 
-        await EmailSender.SendConfirmationLinkAsync(user, email, HtmlEncoder.Default.Encode(callbackUrl));
-
-        message = "Verification email sent. Please check your email.";
+        try
+        {
+            await EmailSender.SendConfirmationLinkAsync(user, email, HtmlEncoder.Default.Encode(callbackUrl));
+            message = "Verification email sent. Please check your email.";
+        }
+        catch (Exception)
+        {
+            message = "Error sending verification email. Please check your SMTP settings.";
+        }
     }
 
     private sealed class InputModel

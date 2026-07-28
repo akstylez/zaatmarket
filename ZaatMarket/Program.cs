@@ -39,12 +39,11 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
 
-// CRITICAL HTTPS PROXY FIX: Trust headers from reverse proxies (Nginx, IIS, Cloudflare)
-// Forces Google OAuth to generate 'https://' callback URLs instead of 'http://' in production.
+// CRITICAL HTTPS PROXY FIX: Using KnownIPNetworks to satisfy .NET 8+ compiler warnings
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
-    options.KnownNetworks.Clear();
+    options.KnownIPNetworks.Clear();
     options.KnownProxies.Clear();
 });
 
@@ -70,12 +69,10 @@ builder.Services.AddHttpClient<ZaattAiService>();
 // ==========================================
 // 4. EXTERNAL INTEGRATIONS (EMAIL & PAYNOW)
 // ==========================================
-// SMTP / Email
 builder.Services.Configure<SmtpSettings>(builder.Configuration.GetSection("Smtp"));
 builder.Services.AddTransient<IEmailSender<ApplicationUser>, EmailSender>();
 builder.Services.AddTransient<EmailSender>();
 
-// Paynow Payment Gateway
 builder.Services.Configure<PaynowSettings>(builder.Configuration.GetSection("Paynow"));
 builder.Services.AddSingleton<PaynowPaymentStore>();
 builder.Services.AddHttpClient<PaynowService>();
@@ -88,8 +85,6 @@ builder.Services.AddIdentityCore<ApplicationUser>(options =>
     options.SignIn.RequireConfirmedAccount = false;
     options.SignIn.RequireConfirmedEmail = false;
     options.Stores.SchemaVersion = IdentitySchemaVersions.Version3;
-
-    // Enforce unique emails to block duplicate database record exceptions
     options.User.RequireUniqueEmail = true;
 })
     .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -144,9 +139,9 @@ app.UseAuthorization();
 app.UseAntiforgery();
 
 // ==========================================
-// 7. MINIMAL API ENDPOINTS
+// 7. MINIMAL API ENDPOINTS (With Explicit IResult Delegates)
 // ==========================================
-app.MapGet("/auth/logout", async (HttpContext http) =>
+app.MapGet("/auth/logout", async Task<IResult> (HttpContext http) =>
 {
     await http.SignOutAsync(IdentityConstants.ApplicationScheme);
     await http.SignOutAsync(IdentityConstants.ExternalScheme);
@@ -156,7 +151,7 @@ app.MapGet("/auth/logout", async (HttpContext http) =>
     return Results.Redirect("/");
 });
 
-app.MapPost("/api/paynow/start", async (
+app.MapPost("/api/paynow/start", async Task<IResult> (
     PaynowService paynowService,
     PaynowStartRequest request) =>
 {
@@ -182,7 +177,7 @@ app.MapPost("/api/paynow/start", async (
         : Results.BadRequest(result);
 });
 
-app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore store) =>
+app.MapPost("/api/paynow/result", async Task<IResult> (HttpRequest request, PaynowPaymentStore store) =>
 {
     var form = await request.ReadFormAsync();
 
@@ -194,7 +189,11 @@ app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore
     var paymentChannel = form["paymentchannel"].ToString();
     var paymentInstrument = form["paymentinstrument"].ToString();
 
-    decimal.TryParse(amountText, out var amount);
+    // Fixed: Explicit check on TryParse to satisfy compiler warning
+    if (!decimal.TryParse(amountText, out var amount))
+    {
+        amount = 0m;
+    }
 
     if (!string.IsNullOrWhiteSpace(reference))
     {
@@ -211,13 +210,13 @@ app.MapPost("/api/paynow/result", async (HttpRequest request, PaynowPaymentStore
     return Results.Ok();
 });
 
-app.MapGet("/api/paynow/status/{reference}", async (string reference, PaynowService paynowService) =>
+app.MapGet("/api/paynow/status/{reference}", async Task<IResult> (string reference, PaynowService paynowService) =>
 {
     var result = await paynowService.CheckStatusAsync(reference);
     return result.Found ? Results.Ok(result) : Results.NotFound(result);
 });
 
-app.MapGet("/payment-return", (HttpRequest request) =>
+app.MapGet("/payment-return", IResult (HttpRequest request) =>
 {
     var reference = request.Query["reference"].ToString();
     var url = string.IsNullOrWhiteSpace(reference)
@@ -245,14 +244,12 @@ using (var scope = app.Services.CreateScope())
     {
         var factory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         using var context = factory.CreateDbContext();
-
-        // Safely applies pending schema migrations without wiping existing data:
         context.Database.Migrate();
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while migrating the Supabase database.");
+        logger.LogError(ex, "An error occurred while migrating the database.");
     }
 }
 

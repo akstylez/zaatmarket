@@ -208,11 +208,11 @@
         gap: 8px;
     }
 
-    .input-group-custom label {
-        color: var(--text-main);
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
+        .input-group-custom label {
+            color: var(--text-main);
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
 
     .custom-input {
         background: var(--bg-card);
@@ -225,15 +225,15 @@
         transition: all 0.2s;
     }
 
-    .custom-input:focus {
-        border-color: var(--accent-orange);
-        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
-    }
+        .custom-input:focus {
+            border-color: var(--accent-orange);
+            box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+        }
 
-    .custom-input:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-    }
+        .custom-input:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
 
     .val-error {
         color: #ef4444;
@@ -259,18 +259,18 @@
         box-shadow: 0 8px 20px rgba(255, 102, 0, 0.25);
     }
 
-    .submit-btn:hover:not(:disabled) {
-        background: var(--accent-hover);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 25px rgba(255, 102, 0, 0.35);
-    }
+        .submit-btn:hover:not(:disabled) {
+            background: var(--accent-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(255, 102, 0, 0.35);
+        }
 
-    .submit-btn:disabled {
-        background: var(--border-color);
-        color: var(--text-muted);
-        box-shadow: none;
-        cursor: not-allowed;
-    }
+        .submit-btn:disabled {
+            background: var(--border-color);
+            color: var(--text-muted);
+            box-shadow: none;
+            cursor: not-allowed;
+        }
 
     .spinner {
         width: 18px;
@@ -305,17 +305,31 @@
     }
 
     @@keyframes slideUp {
-        from { opacity: 0; transform: translateY(16px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(16px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
     @@keyframes spin {
-        to { transform: rotate(360deg); }
+        to {
+            transform: rotate(360deg);
+        }
     }
 
     @@media (max-width: 500px) {
-        .external-card { padding: 28px 20px; }
-        .card-header-section h1 { font-size: 1.5rem; }
+        .external-card {
+            padding: 28px 20px;
+        }
+
+        .card-header-section h1 {
+            font-size: 1.5rem;
+        }
     }
 </style>
 
@@ -376,7 +390,6 @@
 
         var finalReturnUrl = string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl;
 
-        // 1. Try to sign in normally
         var result = await SignInManager.ExternalLoginSignInAsync(
             externalLoginInfo.LoginProvider,
             externalLoginInfo.ProviderKey,
@@ -390,7 +403,6 @@
             return;
         }
 
-        // 2. DATABASE RESILIENCE: Safely check and link existing Supabase account if email matches
         var email = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email);
         if (!string.IsNullOrEmpty(email))
         {
@@ -399,7 +411,6 @@
                 var user = await UserManager.FindByEmailAsync(email);
                 if (user != null)
                 {
-                    // Link the Google account to the existing local user
                     var addLoginResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
                     if (addLoginResult.Succeeded || addLoginResult.Errors.Any(e => e.Code == "LoginAlreadyAssociated"))
                     {
@@ -421,7 +432,6 @@
             return;
         }
 
-        // 3. If no account found, proceed to clean registration card
         ConfirmationInput.Email = email ?? "";
         showConfirmationForm = true;
     }
@@ -477,7 +487,6 @@
                 "User created an account using {Name} provider.",
                 externalLoginInfo.LoginProvider);
 
-            // --> CRITICAL FIX: Wrapped in try/catch so SMTP network timeouts NEVER freeze Google Sign-In!
             try
             {
                 var userId = await UserManager.GetUserIdAsync(user);
@@ -499,7 +508,6 @@
             }
             catch (Exception ex)
             {
-                // Silently log email failures to terminal without hanging the user's registration
                 Logger.LogError(ex, "Failed to send confirmation link email to {Email}. Continuing login flow.", ConfirmationInput.Email);
             }
 
