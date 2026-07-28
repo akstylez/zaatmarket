@@ -18,44 +18,306 @@
 @inject IdentityRedirectManager RedirectManager
 @inject ILogger<ExternalLogin> Logger
 
-<PageTitle>External Login</PageTitle>
+<PageTitle>Associate @ProviderDisplayName | ZaatMarket</PageTitle>
 
-<StatusMessage Message="@message" />
+<div class="external-login-wrapper">
+    <div class="external-card slide-up">
+        <div class="card-header-section">
+            <div class="brand-badge">⚡ ZaatMarket Account</div>
+            <h1>Complete Your Registration</h1>
+            <p class="subtitle">You've successfully authenticated with <span class="provider-highlight">@ProviderDisplayName</span>.</p>
+        </div>
 
-@if (showConfirmationForm)
-{
-    <h1>Register</h1>
-    <h2>Associate your @ProviderDisplayName account.</h2>
-    <hr />
+        @if (!string.IsNullOrEmpty(message))
+        {
+            <div class="status-alert error-alert">
+                <span>⚠️</span>
+                <div>@message</div>
+            </div>
+        }
 
-    <div class="alert alert-info">
-        You've successfully authenticated with <strong>@ProviderDisplayName</strong>.
-        Please enter an email address for this site below and click Register to finish logging in.
-    </div>
+        @if (showConfirmationForm)
+        {
+            <div class="info-banner">
+                <span class="info-icon">🔗</span>
+                <p>Please confirm or enter the email address you want to associate with your ZaatMarket profile below to finish logging in.</p>
+            </div>
 
-    <div class="row">
-        <div class="col-md-4">
-            <EditForm Model="ConfirmationInput" OnValidSubmit="OnValidSubmitAsync" FormName="externalRegisterForm" method="post">
+            <EditForm Model="ConfirmationInput" OnValidSubmit="OnValidSubmitAsync" FormName="externalRegisterForm" method="post" class="form-content">
                 <DataAnnotationsValidator />
-                <ValidationSummary class="text-danger" role="alert" />
 
-                <div class="form-floating mb-3">
+                <div class="input-group-custom">
+                    <label for="Input.Email">Email Address</label>
                     <InputText @bind-Value="ConfirmationInput.Email"
                                id="Input.Email"
-                               class="form-control"
+                               class="custom-input"
                                autocomplete="email"
-                               placeholder="Please enter your email." />
-                    <label for="Input.Email">Email</label>
-                    <ValidationMessage For="@(() => ConfirmationInput.Email)" />
+                               placeholder="yourname@gmail.com"
+                               disabled="@isSubmitting" />
+                    <ValidationMessage For="@(() => ConfirmationInput.Email)" class="val-error" />
                 </div>
 
-                <button type="submit" class="w-100 btn btn-lg btn-primary">
-                    Register
+                <button type="submit" class="submit-btn @(isSubmitting ? "loading" : "")" disabled="@isSubmitting">
+                    @if (isSubmitting)
+                    {
+                        <span class="spinner"></span>
+                        <span>Creating Account...</span>
+                    }
+                    else
+                    {
+                        <span>Finish & Log In</span>
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline></svg>
+                    }
                 </button>
             </EditForm>
-        </div>
+        }
+        else
+        {
+            <div class="loading-state">
+                <div class="main-spinner"></div>
+                <p>Connecting your @ProviderDisplayName account...</p>
+            </div>
+        }
     </div>
-}
+</div>
+
+<style>
+    :root {
+        --bg-obsidian: #070a12;
+        --bg-surface: #0c111d;
+        --bg-card: #141b2d;
+        --border-color: #1f2a44;
+        --accent-orange: #ff6600;
+        --accent-hover: #e65c00;
+        --text-main: #f8fafc;
+        --text-muted: #94a3b8;
+    }
+
+    .external-login-wrapper {
+        min-height: calc(100vh - 140px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 40px 20px;
+        background: var(--bg-obsidian);
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .external-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-color);
+        border-radius: 24px;
+        padding: 40px;
+        max-width: 480px;
+        width: 100%;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+    }
+
+    .card-header-section {
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .brand-badge {
+        background: rgba(255, 102, 0, 0.15);
+        color: var(--accent-orange);
+        border: 1px solid rgba(255, 102, 0, 0.3);
+        padding: 6px 14px;
+        border-radius: 20px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+    }
+
+    .card-header-section h1 {
+        color: var(--text-main);
+        font-size: 1.8rem;
+        font-weight: 800;
+        margin: 0;
+        letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+        color: var(--text-muted);
+        font-size: 0.95rem;
+        margin: 0;
+    }
+
+    .provider-highlight {
+        color: white;
+        font-weight: 700;
+        text-decoration: underline;
+        text-decoration-color: var(--accent-orange);
+    }
+
+    .info-banner {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        border-left: 4px solid var(--accent-orange);
+        padding: 16px;
+        border-radius: 12px;
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+
+    .info-icon {
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .info-banner p {
+        color: #cbd5e1;
+        font-size: 0.88rem;
+        line-height: 1.5;
+        margin: 0;
+    }
+
+    .status-alert {
+        padding: 14px 16px;
+        border-radius: 12px;
+        font-size: 0.9rem;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .error-alert {
+        background: rgba(239, 68, 68, 0.1);
+        border: 1px solid rgba(239, 68, 68, 0.3);
+        color: #ef4444;
+    }
+
+    .form-content {
+        display: flex;
+        flex-direction: column;
+        gap: 20px;
+    }
+
+    .input-group-custom {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .input-group-custom label {
+        color: var(--text-main);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .custom-input {
+        background: var(--bg-card);
+        border: 1px solid var(--border-color);
+        color: white;
+        padding: 14px 16px;
+        border-radius: 12px;
+        font-size: 1rem;
+        outline: none;
+        transition: all 0.2s;
+    }
+
+    .custom-input:focus {
+        border-color: var(--accent-orange);
+        box-shadow: 0 0 0 3px rgba(255, 102, 0, 0.15);
+    }
+
+    .custom-input:disabled {
+        opacity: 0.6;
+        cursor: not-allowed;
+    }
+
+    .val-error {
+        color: #ef4444;
+        font-size: 0.82rem;
+        font-weight: 600;
+    }
+
+    .submit-btn {
+        width: 100%;
+        background: var(--accent-orange);
+        color: white;
+        border: none;
+        padding: 16px;
+        border-radius: 14px;
+        font-size: 1rem;
+        font-weight: 700;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        transition: all 0.25s;
+        box-shadow: 0 8px 20px rgba(255, 102, 0, 0.25);
+    }
+
+    .submit-btn:hover:not(:disabled) {
+        background: var(--accent-hover);
+        transform: translateY(-2px);
+        box-shadow: 0 10px 25px rgba(255, 102, 0, 0.35);
+    }
+
+    .submit-btn:disabled {
+        background: var(--border-color);
+        color: var(--text-muted);
+        box-shadow: none;
+        cursor: not-allowed;
+    }
+
+    .spinner {
+        width: 18px;
+        height: 18px;
+        border: 3px solid rgba(255, 255, 255, 0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .loading-state {
+        padding: 40px 0;
+        text-align: center;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        color: var(--text-muted);
+    }
+
+    .main-spinner {
+        width: 36px;
+        height: 36px;
+        border: 3px solid var(--border-color);
+        border-top-color: var(--accent-orange);
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .slide-up {
+        animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+
+    @@keyframes slideUp {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    @@keyframes spin {
+        to { transform: rotate(360deg); }
+    }
+
+    @@media (max-width: 500px) {
+        .external-card { padding: 28px 20px; }
+        .card-header-section h1 { font-size: 1.5rem; }
+    }
+</style>
 
 @code {
     public const string LoginCallbackAction = "LoginCallback";
@@ -63,6 +325,7 @@
     private string? message;
     private ExternalLoginInfo? externalLoginInfo;
     private bool showConfirmationForm;
+    private bool isSubmitting;
 
     private InputModel ConfirmationInput { get; set; } = new();
 
@@ -127,21 +390,28 @@
             return;
         }
 
-        // 2. THE FIX: Link existing account if email matches
+        // 2. DATABASE RESILIENCE: Safely check and link existing Supabase account if email matches
         var email = externalLoginInfo.Principal.FindFirstValue(ClaimTypes.Email);
         if (!string.IsNullOrEmpty(email))
         {
-            var user = await UserManager.FindByEmailAsync(email);
-            if (user != null)
+            try
             {
-                // Link the Google account to the existing local user
-                var addLoginResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
-                if (addLoginResult.Succeeded)
+                var user = await UserManager.FindByEmailAsync(email);
+                if (user != null)
                 {
-                    await SignInManager.SignInAsync(user, isPersistent: false, externalLoginInfo.LoginProvider);
-                    RedirectManager.RedirectTo(finalReturnUrl);
-                    return;
+                    // Link the Google account to the existing local user
+                    var addLoginResult = await UserManager.AddLoginAsync(user, externalLoginInfo);
+                    if (addLoginResult.Succeeded || addLoginResult.Errors.Any(e => e.Code == "LoginAlreadyAssociated"))
+                    {
+                        await SignInManager.SignInAsync(user, isPersistent: false, externalLoginInfo.LoginProvider);
+                        RedirectManager.RedirectTo(finalReturnUrl);
+                        return;
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Database lookup exception while linking email {Email}. Proceeding to registration form.", email);
             }
         }
 
@@ -151,83 +421,107 @@
             return;
         }
 
-        // 3. If no account found, proceed to registration
+        // 3. If no account found, proceed to clean registration card
         ConfirmationInput.Email = email ?? "";
         showConfirmationForm = true;
     }
 
     private async Task OnValidSubmitAsync()
     {
-        externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync();
+        if (isSubmitting) return;
 
-        if (externalLoginInfo is null)
+        isSubmitting = true;
+        message = null;
+        StateHasChanged();
+
+        try
         {
-            RedirectManager.RedirectToWithStatus(
-                "Account/Login",
-                "Error loading external login information during confirmation.",
-                HttpContext);
-            return;
-        }
+            externalLoginInfo = await SignInManager.GetExternalLoginInfoAsync();
 
-        var emailStore = GetEmailStore();
-        var user = CreateUser();
-
-        await UserStore.SetUserNameAsync(user, ConfirmationInput.Email, CancellationToken.None);
-        await emailStore.SetEmailAsync(user, ConfirmationInput.Email, CancellationToken.None);
-
-        var result = await UserManager.CreateAsync(user);
-
-        if (!result.Succeeded)
-        {
-            message = $"Error: {string.Join(", ", result.Errors.Select(e => e.Description))}";
-            showConfirmationForm = true;
-            return;
-        }
-
-        result = await UserManager.AddLoginAsync(user, externalLoginInfo);
-
-        if (!result.Succeeded)
-        {
-            message = $"Error: {string.Join(", ", result.Errors.Select(e => e.Description))}";
-            showConfirmationForm = true;
-            return;
-        }
-
-        Logger.LogInformation(
-            "User created an account using {Name} provider.",
-            externalLoginInfo.LoginProvider);
-
-        var userId = await UserManager.GetUserIdAsync(user);
-        var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
-        code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
-
-        var callbackUrl = NavigationManager.GetUriWithQueryParameters(
-            NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
-            new Dictionary<string, object?>
+            if (externalLoginInfo is null)
             {
-                ["userId"] = userId,
-                ["code"] = code
-            });
+                RedirectManager.RedirectToWithStatus(
+                    "Account/Login",
+                    "Error loading external login information during confirmation.",
+                    HttpContext);
+                return;
+            }
 
-        await EmailSender.SendConfirmationLinkAsync(
-            user,
-            ConfirmationInput.Email,
-            HtmlEncoder.Default.Encode(callbackUrl));
+            var emailStore = GetEmailStore();
+            var user = CreateUser();
 
-        if (UserManager.Options.SignIn.RequireConfirmedAccount)
-        {
-            RedirectManager.RedirectTo(
-                "Account/RegisterConfirmation",
-                new Dictionary<string, object?> { ["email"] = ConfirmationInput.Email });
-            return;
+            await UserStore.SetUserNameAsync(user, ConfirmationInput.Email, CancellationToken.None);
+            await emailStore.SetEmailAsync(user, ConfirmationInput.Email, CancellationToken.None);
+
+            var result = await UserManager.CreateAsync(user);
+
+            if (!result.Succeeded)
+            {
+                message = $"Error: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+
+            result = await UserManager.AddLoginAsync(user, externalLoginInfo);
+
+            if (!result.Succeeded)
+            {
+                message = $"Error: {string.Join(", ", result.Errors.Select(e => e.Description))}";
+                isSubmitting = false;
+                StateHasChanged();
+                return;
+            }
+
+            Logger.LogInformation(
+                "User created an account using {Name} provider.",
+                externalLoginInfo.LoginProvider);
+
+            // --> CRITICAL FIX: Wrapped in try/catch so SMTP network timeouts NEVER freeze Google Sign-In!
+            try
+            {
+                var userId = await UserManager.GetUserIdAsync(user);
+                var code = await UserManager.GenerateEmailConfirmationTokenAsync(user);
+                code = WebEncoders.Base64UrlEncode(Encoding.UTF8.GetBytes(code));
+
+                var callbackUrl = NavigationManager.GetUriWithQueryParameters(
+                    NavigationManager.ToAbsoluteUri("Account/ConfirmEmail").AbsoluteUri,
+                    new Dictionary<string, object?>
+                    {
+                        ["userId"] = userId,
+                        ["code"] = code
+                    });
+
+                await EmailSender.SendConfirmationLinkAsync(
+                    user,
+                    ConfirmationInput.Email,
+                    HtmlEncoder.Default.Encode(callbackUrl));
+            }
+            catch (Exception ex)
+            {
+                // Silently log email failures to terminal without hanging the user's registration
+                Logger.LogError(ex, "Failed to send confirmation link email to {Email}. Continuing login flow.", ConfirmationInput.Email);
+            }
+
+            if (UserManager.Options.SignIn.RequireConfirmedAccount)
+            {
+                RedirectManager.RedirectTo(
+                    "Account/RegisterConfirmation",
+                    new Dictionary<string, object?> { ["email"] = ConfirmationInput.Email });
+                return;
+            }
+
+            await SignInManager.SignInAsync(
+                user,
+                isPersistent: false,
+                externalLoginInfo.LoginProvider);
+
+            RedirectManager.RedirectTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl);
         }
-
-        await SignInManager.SignInAsync(
-            user,
-            isPersistent: false,
-            externalLoginInfo.LoginProvider);
-
-        RedirectManager.RedirectTo(string.IsNullOrWhiteSpace(ReturnUrl) ? "/" : ReturnUrl);
+        finally
+        {
+            isSubmitting = false;
+        }
     }
 
     private ApplicationUser CreateUser()

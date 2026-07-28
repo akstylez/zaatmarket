@@ -50,7 +50,6 @@ namespace ZaatMarket.Services
             await SendEmailAsync(email, subject, htmlMessage);
         }
 
-
         public async Task SendOfflineChatNotificationAsync(string toEmail, string senderUsername, string messagePreview)
         {
             var subject = $"New message from {senderUsername} on Z-A-A-T-T";
@@ -64,7 +63,7 @@ namespace ZaatMarket.Services
                     </blockquote>
                     
                     <p style='margin-top: 30px;'>
-                        <a href='https://localhost:7092/messages' style='background: #ff6600; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
+                        <a href='https://zaattmarket.co.zw/messages' style='background: #ff6600; color: white; padding: 12px 25px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;'>
                             Click here to reply
                         </a>
                     </p>
@@ -103,10 +102,6 @@ namespace ZaatMarket.Services
             await SendEmailAsync(toEmail, subject, htmlMessage);
         }
 
-        // Change this:
-        // private async Task SendEmailAsync(string toEmail, string subject, string htmlMessage)
-
-        // To this:
         public async Task SendEmailAsync(string toEmail, string subject, string htmlMessage)
         {
             var message = new MimeMessage();
@@ -118,10 +113,14 @@ namespace ZaatMarket.Services
 
             using var client = new MailKit.Net.Smtp.SmtpClient();
 
-            // Optional: Add this to avoid errors in development if the server certificate isn't valid
+            // --> CRITICAL RESILIENCE FIX: Prevent server hangs by enforcing a strict 10-second timeout!
+            client.Timeout = 10000;
+
+            // Optional: Uncomment only if testing locally and certificate validation fails
             // client.ServerCertificateValidationCallback = (s, c, h, e) => true;
 
-            await client.ConnectAsync(_smtp.Host, _smtp.Port, SecureSocketOptions.StartTls);
+            // --> CRITICAL CPANEL FIX: Using SecureSocketOptions.Auto automatically adapts to Port 465 (SSL) or Port 587 (TLS)
+            await client.ConnectAsync(_smtp.Host, _smtp.Port, SecureSocketOptions.Auto);
             await client.AuthenticateAsync(_smtp.Username, _smtp.Password);
             await client.SendAsync(message);
             await client.DisconnectAsync(true);

@@ -39,6 +39,8 @@ builder.Services.AddHttpContextAccessor();
 builder.Services.AddCascadingAuthenticationState();
 builder.Services.AddAuthorization();
 
+// CRITICAL HTTPS PROXY FIX: Trust headers from reverse proxies (Nginx, IIS, Cloudflare)
+// Forces Google OAuth to generate 'https://' callback URLs instead of 'http://' in production.
 builder.Services.Configure<ForwardedHeadersOptions>(options =>
 {
     options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
@@ -234,7 +236,7 @@ app.MapRazorComponents<App>()
 app.MapAdditionalIdentityEndpoints();
 
 // ==========================================
-// 9. SUPABASE DATABASE RESET & WIPE ON STARTUP
+// 9. AUTOMATIC DATABASE MIGRATIONS ON STARTUP
 // ==========================================
 using (var scope = app.Services.CreateScope())
 {
@@ -244,14 +246,13 @@ using (var scope = app.Services.CreateScope())
         var factory = services.GetRequiredService<IDbContextFactory<ApplicationDbContext>>();
         using var context = factory.CreateDbContext();
 
-        // COMPLETELY WIPE SUPABASE DATABASE & RECREATE FROM SCRATCH:
-        context.Database.EnsureDeleted();
+        // Safely applies pending schema migrations without wiping existing data:
         context.Database.Migrate();
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "An error occurred while resetting and migrating the Supabase database.");
+        logger.LogError(ex, "An error occurred while migrating the Supabase database.");
     }
 }
 
