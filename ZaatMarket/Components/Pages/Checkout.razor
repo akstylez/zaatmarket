@@ -1,15 +1,22 @@
 ﻿@page "/checkout"
+@rendermode InteractiveServer
+
 @using ZaatMarket.Services
 @using ZaatMarket.Models
+@using ZaatMarket.Data
 @using System.ComponentModel.DataAnnotations
 @using System.Globalization
+@using System.Security.Claims
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Authorization
 
 @inject ICartService Cart
 @inject PaynowService Paynow
 @inject NavigationManager Nav
-@inject ZaatMarket.Data.ApplicationDbContext Db
-@inject ZaatMarket.Services.EmailSender EmailService
-@rendermode InteractiveServer
+@inject ApplicationDbContext Db
+@inject EmailSender EmailService
+@inject AuthenticationStateProvider AuthStateProvider
+@inject UserManager<ApplicationUser> UserManager
 
 <PageTitle>Checkout | ZaatMarket</PageTitle>
 
@@ -73,40 +80,43 @@
                     <h3 class="section-subtitle">Contact Information</h3>
                     <div class="field">
                         <label for="fullName">Full Name</label>
-                        <InputText id="fullName" @bind-Value="PaymentInput.FullName" class="input" />
+                        <InputText id="fullName" @bind-Value="PaymentInput.FullName" class="input" disabled="@IsProcessingPayment" />
                         <ValidationMessage For="@(() => PaymentInput.FullName)" />
                     </div>
 
                     <div class="field">
                         <label for="email">Email Address</label>
-                        <InputText id="email" @bind-Value="PaymentInput.Email" class="input" />
+                        <InputText id="email" @bind-Value="PaymentInput.Email" class="input" disabled="@IsProcessingPayment" />
                         <ValidationMessage For="@(() => PaymentInput.Email)" />
                     </div>
 
-                    <!-- Logistics & Delivery -->
-                    <h3 class="section-subtitle">Logistics & Delivery</h3>
-                    <div class="field-row">
-                        <div class="field">
-                            <label for="deliveryFrom">Dispatch Origin (From)</label>
-                            <InputText id="deliveryFrom" @bind-Value="PaymentInput.DeliveryFrom" class="input" placeholder="e.g. Harare" />
-                            <ValidationMessage For="@(() => PaymentInput.DeliveryFrom)" />
+                    <!-- Logistics & Delivery (Hidden if Digital Subscription) -->
+                    @if (!IsSubscriptionOrder)
+                    {
+                        <h3 class="section-subtitle">Logistics & Delivery</h3>
+                        <div class="field-row">
+                            <div class="field">
+                                <label for="deliveryFrom">Dispatch Origin (From)</label>
+                                <InputText id="deliveryFrom" @bind-Value="PaymentInput.DeliveryFrom" class="input" placeholder="e.g. Harare" disabled="@IsProcessingPayment" />
+                                <ValidationMessage For="@(() => PaymentInput.DeliveryFrom)" />
+                            </div>
+                            <div class="field">
+                                <label for="deliveryTo">Final Destination (To)</label>
+                                <InputText id="deliveryTo" @bind-Value="PaymentInput.DeliveryTo" class="input" placeholder="e.g. Bulawayo" disabled="@IsProcessingPayment" />
+                                <ValidationMessage For="@(() => PaymentInput.DeliveryTo)" />
+                            </div>
                         </div>
-                        <div class="field">
-                            <label for="deliveryTo">Final Destination (To)</label>
-                            <InputText id="deliveryTo" @bind-Value="PaymentInput.DeliveryTo" class="input" placeholder="e.g. Bulawayo" />
-                            <ValidationMessage For="@(() => PaymentInput.DeliveryTo)" />
-                        </div>
-                    </div>
+                    }
 
                     <!-- Payment Method -->
                     <h3 class="section-subtitle">Payment Method</h3>
                     <div class="payment-tabs">
-                        <button class="tab-btn @(SelectedMethod == "EcoCash" ? "active" : "")" 
-                                @onclick='() => SelectMethod("EcoCash")' type="button">
+                        <button class="tab-btn @(SelectedMethod == "EcoCash" ? "active" : "")"
+                                @onclick="@(() => SelectMethod("EcoCash"))" type="button" disabled="@IsProcessingPayment">
                             📱 EcoCash
                         </button>
-                        <button class="tab-btn @(SelectedMethod == "Card" ? "active" : "")" 
-                                @onclick='() => SelectMethod("Card")' type="button">
+                        <button class="tab-btn @(SelectedMethod == "Card" ? "active" : "")"
+                                @onclick="@(() => SelectMethod("Card"))" type="button" disabled="@IsProcessingPayment">
                             💳 Visa / Mastercard
                         </button>
                     </div>
@@ -115,7 +125,7 @@
                     {
                         <div class="field slide-in">
                             <label for="phone">EcoCash Number</label>
-                            <InputText id="phone" @bind-Value="PaymentInput.PhoneNumber" class="input" placeholder="e.g. 0771234567" />
+                            <InputText id="phone" @bind-Value="PaymentInput.PhoneNumber" class="input" placeholder="e.g. 0771234567" disabled="@IsProcessingPayment" />
                             <ValidationMessage For="@(() => PaymentInput.PhoneNumber)" />
                         </div>
                     }
@@ -125,7 +135,7 @@
                             <div class="secure-icon">🔒</div>
                             <div>
                                 <strong>Secure Redirect</strong>
-                                <p>You will be securely redirected to Paynow to enter your Visa or Mastercard details.</p>
+                                <p>You will be securely redirected to Paynow to enter your card details.</p>
                             </div>
                         </div>
                     }
@@ -151,59 +161,263 @@
 </div>
 
 <style>
-    .checkout-page { min-height: calc(100vh - 80px); background: #f4f5f8; padding: 40px 20px 60px; }
-    .checkout-wrap { max-width: 1100px; margin: 0 auto; }
-    .page-title { font-size: 3rem; margin: 0 0 20px; color: #0f172a; font-weight: 800; }
-    .status-banner { margin-bottom: 18px; padding: 14px 16px; border-radius: 16px; font-weight: 600; }
-    .status-banner.error { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
-    .status-banner.success { background: #dcfce7; color: #166534; border: 1px solid #86efac; }
-    .checkout-grid { display: grid; grid-template-columns: 1.2fr 0.9fr; gap: 24px; align-items: start; }
-    .checkout-card { background: #ffffff; border-radius: 26px; padding: 26px; box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08); }
-    .checkout-card h2 { margin: 0 0 14px; font-size: 1.8rem; color: #111827; }
-    
-    .section-subtitle { margin: 24px 0 16px; font-size: 1.15rem; color: #1f2937; border-bottom: 1px solid #f1f5f9; padding-bottom: 8px; }
-    .field-row { display: flex; gap: 16px; }
-    .field-row .field { flex: 1; }
+    .checkout-page {
+        min-height: calc(100vh - 80px);
+        background: #f4f5f8;
+        padding: 40px 20px 60px;
+    }
 
-    .payment-tabs { display: flex; gap: 10px; margin-bottom: 24px; background: #f1f5f9; padding: 6px; border-radius: 16px; }
-    .tab-btn { flex: 1; padding: 12px; border: none; background: transparent; border-radius: 12px; font-weight: 700; color: #64748b; cursor: pointer; transition: 0.2s; }
-    .tab-btn.active { background: white; color: #0f172a; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+    .checkout-wrap {
+        max-width: 1100px;
+        margin: 0 auto;
+    }
 
-    .secure-notice { display: flex; gap: 15px; align-items: center; background: #f0fdf4; border: 1px solid #bbf7d0; padding: 16px; border-radius: 14px; margin-bottom: 20px; color: #166534; }
-    .secure-icon { font-size: 1.5rem; }
-    .secure-notice p { margin: 4px 0 0; font-size: 0.9rem; color: #15803d; }
-    .slide-in { animation: slideDown 0.3s ease-out forwards; }
+    .page-title {
+        font-size: 3rem;
+        margin: 0 0 20px;
+        color: #0f172a;
+        font-weight: 800;
+    }
+
+    .status-banner {
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        border-radius: 16px;
+        font-weight: 600;
+    }
+
+        .status-banner.error {
+            background: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fca5a5;
+        }
+
+        .status-banner.success {
+            background: #dcfce7;
+            color: #166534;
+            border: 1px solid #86efac;
+        }
+
+    .checkout-grid {
+        display: grid;
+        grid-template-columns: 1.2fr 0.9fr;
+        gap: 24px;
+        align-items: start;
+    }
+
+    .checkout-card {
+        background: #ffffff;
+        border-radius: 26px;
+        padding: 26px;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+    }
+
+        .checkout-card h2 {
+            margin: 0 0 14px;
+            font-size: 1.8rem;
+            color: #111827;
+        }
+
+    .section-subtitle {
+        margin: 24px 0 16px;
+        font-size: 1.15rem;
+        color: #1f2937;
+        border-bottom: 1px solid #f1f5f9;
+        padding-bottom: 8px;
+    }
+
+    .field-row {
+        display: flex;
+        gap: 16px;
+    }
+
+        .field-row .field {
+            flex: 1;
+        }
+
+    .payment-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 24px;
+        background: #f1f5f9;
+        padding: 6px;
+        border-radius: 16px;
+    }
+
+    .tab-btn {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        background: transparent;
+        border-radius: 12px;
+        font-weight: 700;
+        color: #64748b;
+        cursor: pointer;
+        transition: 0.2s;
+    }
+
+        .tab-btn.active {
+            background: white;
+            color: #0f172a;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+        }
+
+    .secure-notice {
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        background: #f0fdf4;
+        border: 1px solid #bbf7d0;
+        padding: 16px;
+        border-radius: 14px;
+        margin-bottom: 20px;
+        color: #166534;
+    }
+
+    .secure-icon {
+        font-size: 1.5rem;
+    }
+
+    .secure-notice p {
+        margin: 4px 0 0;
+        font-size: 0.9rem;
+        color: #15803d;
+    }
+
+    .slide-in {
+        animation: slideDown 0.3s ease-out forwards;
+    }
 
     @@keyframes slideDown {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
     }
 
-    .summary-row { display: grid; grid-template-columns: 1fr auto; gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid #e5e7eb; }
-    .item-name { font-weight: 700; color: #111827; }
-    .item-meta { color: #6b7280; font-size: 0.95rem; margin-top: 4px; }
-    .item-total { font-weight: 800; color: #111827; text-align: right; }
-    .summary-total { display: flex; justify-content: space-between; align-items: center; padding-top: 18px; font-size: 1.8rem; font-weight: 800; color: #111827; }
-    
-    .field { margin-bottom: 16px; }
-    .field label { display: block; margin-bottom: 8px; font-weight: 700; color: #1f2937; font-size: 0.95rem; }
-    .input { width: 100%; border: 1px solid #d1d5db; border-radius: 14px; min-height: 50px; padding: 12px 14px; font-size: 1rem; }
-    .input:focus { outline: none; border-color: #2563eb; box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12); }
-    .validation-summary { color: #b91c1c; margin-bottom: 16px; }
-
-    .primary-btn, .secondary-btn, .danger-btn { border: none; border-radius: 14px; padding: 16px; font-weight: 800; font-size: 1.1rem; cursor: pointer; transition: 0.15s; }
-    .primary-btn { background: #2563eb; color: white; width: 100%; margin-top: 10px; }
-    .primary-btn:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-2px); }
-    .primary-btn:disabled { background: #93c5fd; cursor: not-allowed; }
-    
-    .secondary-btn { background: #e5e7eb; color: #111827; padding: 12px 18px; }
-    .danger-btn { background: #ef4444; color: white; padding: 12px 18px; }
-
-    @@media (max-width: 900px) { 
-        .checkout-grid { grid-template-columns: 1fr; } 
+    .summary-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 16px;
+        align-items: center;
+        padding: 16px 0;
+        border-bottom: 1px solid #e5e7eb;
     }
+
+    .item-name {
+        font-weight: 700;
+        color: #111827;
+    }
+
+    .item-meta {
+        color: #6b7280;
+        font-size: 0.95rem;
+        margin-top: 4px;
+    }
+
+    .item-total {
+        font-weight: 800;
+        color: #111827;
+        text-align: right;
+    }
+
+    .summary-total {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-top: 18px;
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: #111827;
+    }
+
+    .field {
+        margin-bottom: 16px;
+    }
+
+        .field label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 700;
+            color: #1f2937;
+            font-size: 0.95rem;
+        }
+
+    .input {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 14px;
+        min-height: 50px;
+        padding: 12px 14px;
+        font-size: 1rem;
+    }
+
+        .input:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+        }
+
+    .validation-summary {
+        color: #b91c1c;
+        margin-bottom: 16px;
+    }
+
+    .primary-btn, .secondary-btn, .danger-btn {
+        border: none;
+        border-radius: 14px;
+        padding: 16px;
+        font-weight: 800;
+        font-size: 1.1rem;
+        cursor: pointer;
+        transition: 0.15s;
+    }
+
+    .primary-btn {
+        background: #2563eb;
+        color: white;
+        width: 100%;
+        margin-top: 10px;
+    }
+
+        .primary-btn:hover:not(:disabled) {
+            background: #1d4ed8;
+            transform: translateY(-2px);
+        }
+
+        .primary-btn:disabled {
+            background: #93c5fd;
+            cursor: not-allowed;
+        }
+
+    .secondary-btn {
+        background: #e5e7eb;
+        color: #111827;
+        padding: 12px 18px;
+    }
+
+    .danger-btn {
+        background: #ef4444;
+        color: white;
+        padding: 12px 18px;
+    }
+
+    @@media (max-width: 900px) {
+        .checkout-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
     @@media (max-width: 600px) {
-        .field-row { flex-direction: column; gap: 0; }
+        .field-row {
+            flex-direction: column;
+            gap: 0;
+        }
     }
 </style>
 
@@ -211,16 +425,26 @@
     private string? StatusMessage;
     private bool StatusIsError;
     private bool IsProcessingPayment;
-    private string SelectedMethod = "EcoCash"; 
+    private string SelectedMethod = "EcoCash";
 
     private PaymentInputModel PaymentInput { get; set; } = new();
     private List<OrderItem> Items { get; set; } = new();
-    
+
     private decimal Total => Items.Sum(x => x.Price * x.Quantity);
+
+    // Check if the cart contains the PRO subscription
+    private bool IsSubscriptionOrder => Items.Any(i => i.Name.Contains("Z-A-A-T-T PRO"));
 
     protected override void OnInitialized()
     {
         LoadCartItems();
+
+        // If it's a digital subscription, auto-fill the delivery fields to bypass validation
+        if (IsSubscriptionOrder)
+        {
+            PaymentInput.DeliveryFrom = "Digital Upgrade";
+            PaymentInput.DeliveryTo = "Account System";
+        }
     }
 
     private void SelectMethod(string method)
@@ -228,11 +452,11 @@
         SelectedMethod = method;
         if (method == "Card")
         {
-            PaymentInput.PhoneNumber = "N/A"; 
+            PaymentInput.PhoneNumber = "N/A";
         }
         else
         {
-            PaymentInput.PhoneNumber = ""; 
+            PaymentInput.PhoneNumber = "";
         }
     }
 
@@ -240,8 +464,8 @@
     {
         Items = Cart.Items.Select(c => new OrderItem
         {
-            Name = c.Title,    
-            Price = c.Price,   
+            Name = c.Title,
+            Price = c.Price,
             Quantity = c.Quantity
         }).ToList();
     }
@@ -266,6 +490,7 @@
         }
 
         IsProcessingPayment = true;
+        StateHasChanged();
 
         try
         {
@@ -273,7 +498,7 @@
             var itemNameSummary = Items.Count == 1 ? Items.First().Name : $"ZaatMarket Order: {Items.Count} items";
 
             // 1. Create and save the order to the database
-            var newOrder = new Order 
+            var newOrder = new Order
             {
                 Reference = reference,
                 TotalAmount = Total,
@@ -288,7 +513,7 @@
             await Db.SaveChangesAsync();
 
             // 2. Send the Email Receipt
-            try 
+            try
             {
                 await EmailService.SendOrderReceiptAsync(
                     toEmail: PaymentInput.Email,
@@ -301,7 +526,6 @@
             }
             catch (Exception ex)
             {
-                // Log the error, but don't stop the checkout process if the email fails to send
                 Console.WriteLine($"Failed to send receipt: {ex.Message}");
             }
 
@@ -314,7 +538,11 @@
                 if (result.Success)
                 {
                     StatusMessage = "Please check your phone for the USSD prompt.";
-                    Cart.Clear(); 
+
+                    // Trigger Database Upgrade immediately since it's a subscription
+                    if (IsSubscriptionOrder) await UpgradeUserToPremiumAgent();
+
+                    Cart.Clear();
                     Items.Clear();
                 }
                 else
@@ -326,13 +554,16 @@
             else if (SelectedMethod == "Card")
             {
                 StatusMessage = "Connecting to Secure Gateway...";
-                
+
                 var result = await Paynow.StartWebPaymentAsync(
-                    reference, PaymentInput.Email, Total, itemNameSummary);
+                                    reference, PaymentInput.Email, Total, itemNameSummary);
 
                 if (result.Success && !string.IsNullOrEmpty(result.RedirectLink))
                 {
-                    Cart.Clear(); 
+                    // Trigger Database Upgrade immediately since we are navigating away
+                    if (IsSubscriptionOrder) await UpgradeUserToPremiumAgent();
+
+                    Cart.Clear();
                     Nav.NavigateTo(result.RedirectLink);
                 }
                 else
@@ -350,6 +581,23 @@
         finally
         {
             IsProcessingPayment = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task UpgradeUserToPremiumAgent()
+    {
+        var authState = await AuthStateProvider.GetAuthenticationStateAsync();
+        var userId = authState.User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+        if (!string.IsNullOrEmpty(userId))
+        {
+            var userToUpdate = await UserManager.FindByIdAsync(userId);
+            if (userToUpdate != null)
+            {
+                userToUpdate.IsPremiumAgent = true;
+                await UserManager.UpdateAsync(userToUpdate);
+            }
         }
     }
 

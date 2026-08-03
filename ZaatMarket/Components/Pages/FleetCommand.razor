@@ -32,7 +32,7 @@ else
 
         <div class="glass-overlay">
             <header class="overlay-header">
-                <button class="btn-back" @onclick='() => Nav.NavigateTo("/agent-dashboard")'>
+                <button class="btn-back" @onclick="@(() => Nav.NavigateTo("/agent-dashboard"))">
                     ← Dashboard
                 </button>
                 <div class="status-badge">
