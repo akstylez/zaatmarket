@@ -2,6 +2,7 @@
 @page "/add-product"
 @rendermode InteractiveServer
 @implements IDisposable
+
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Hosting
 @using System.Security.Claims
@@ -9,16 +10,17 @@
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.EntityFrameworkCore
 @using ZaatMarket.Models
+@using ZaatMarket.Data
 @attribute [Authorize]
 
-@inject IDbContextFactory<ZaatMarket.Data.ApplicationDbContext> DbFactory
+@inject IDbContextFactory<ApplicationDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
 @inject IWebHostEnvironment Env
 @inject IJSRuntime JSRuntime
 @inject ZaatMarket.Services.SupabaseStorageService StorageService
 
-<PageTitle>Sell an Item | ZaatMarket</PageTitle>
+<PageTitle>List a Product | ZAATT</PageTitle>
 
 <div class="sell-page-wrapper">
     <div class="sell-container">
@@ -27,16 +29,16 @@
                 <h1 class="page-title">List a Product</h1>
                 <p class="page-subtitle">Add details, pricing, and inventory to publish to the marketplace.</p>
 
-                <div style="margin-top: 12px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap;">
+                <div class="badge-row">
                     @if (accountType == "Business")
                     {
-                        <span style="background: #1e293b; color: #ff6600; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #ff6600;">
+                        <span class="account-badge business-badge">
                             🏢 Listing as a Verified Business
                         </span>
                     }
                     else
                     {
-                        <span style="background: #ffffff; color: #64748b; padding: 6px 12px; border-radius: 8px; font-size: 0.85rem; font-weight: 700; border: 1px solid #cbd5e1;">
+                        <span class="account-badge ind-badge">
                             👤 Listing as an Individual
                         </span>
                     }
@@ -47,7 +49,7 @@
                     }
                 </div>
             </div>
-            <button type="button" class="btn-ghost-header" @onclick='() => Nav.NavigateTo("/products")'>✕ Cancel</button>
+            <button type="button" class="btn-ghost-header" @onclick="@(() => Nav.NavigateTo("/products"))">✕ Cancel</button>
         </header>
 
         @if (!string.IsNullOrWhiteSpace(error))
@@ -74,13 +76,13 @@
 
                             <div class="field">
                                 <label class="label">Product Title <span class="req">*</span></label>
-                                <InputText class="input modern-input" @bind-Value="model.Title" placeholder="e.g. Apple MacBook Pro 14&quot;" />
+                                <InputText class="input-sleek" @bind-Value="model.Title" placeholder="e.g. Apple MacBook Pro 14&quot;" />
                                 <ValidationMessage For="@(() => model.Title)" class="val-message" />
                             </div>
 
                             <div class="field">
                                 <label class="label">Description <span class="req">*</span></label>
-                                <InputTextArea class="textarea modern-input" @bind-Value="model.Description" rows="6" placeholder="Describe the condition, features, and specs..." />
+                                <InputTextArea class="input-sleek textarea-tall" @bind-Value="model.Description" placeholder="Describe the condition, features, and specs..." />
                                 <ValidationMessage For="@(() => model.Description)" class="val-message" />
                             </div>
                         </section>
@@ -118,7 +120,7 @@
                             <h3 class="section-title">Expansion</h3>
                             <div class="field">
                                 <label class="label">Category <span class="req">*</span></label>
-                                <InputText class="input modern-input" @bind-Value="model.Category" placeholder="e.g. Electronics, Clothing" />
+                                <InputText class="input-sleek" @bind-Value="model.Category" placeholder="e.g. Electronics, Clothing" />
                                 <ValidationMessage For="@(() => model.Category)" class="val-message" />
                             </div>
                         </section>
@@ -130,7 +132,7 @@
                                 <label class="label">Price ($) <span class="req">*</span></label>
                                 <div class="input-with-prefix">
                                     <span class="prefix">$</span>
-                                    <InputNumber class="input modern-input with-prefix" @bind-Value="model.Price" min="0.01" step="0.01" />
+                                    <InputNumber class="input-sleek with-prefix" @bind-Value="model.Price" min="0.01" step="0.01" />
                                 </div>
                                 <ValidationMessage For="@(() => model.Price)" class="val-message" />
                             </div>
@@ -139,7 +141,7 @@
                                 <label class="label">Stock Quantity <span class="req">*</span></label>
                                 <div class="input-with-prefix">
                                     <span class="prefix">📦</span>
-                                    <InputNumber class="input modern-input with-prefix" @bind-Value="model.StockQuantity" min="1" step="1" />
+                                    <InputNumber class="input-sleek with-prefix" @bind-Value="model.StockQuantity" min="1" step="1" />
                                 </div>
                                 <small class="field-hint">How many items are available for sale?</small>
                                 <ValidationMessage For="@(() => model.StockQuantity)" class="val-message" />
@@ -166,10 +168,28 @@
 </div>
 
 <style>
+    :root {
+        --bg-color: #f4f5f8;
+        --card-bg: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --primary: #0f172a;
+        --primary-hover: #1e293b;
+        --accent: #ff6600;
+        --accent-hover: #e65c00;
+        --danger: #ef4444;
+        --radius: 16px;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.06);
+        --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     .sell-page-wrapper {
         min-height: 100vh;
-        background: #f8fafc;
-        padding: 40px 20px;
+        background: var(--bg-color);
+        padding: 40px 24px;
         font-family: system-ui, -apple-system, sans-serif;
     }
 
@@ -178,62 +198,98 @@
         margin: 0 auto;
     }
 
+    /* Header Styles */
     .sell-header {
         display: flex;
         justify-content: space-between;
         align-items: flex-start;
-        margin-bottom: 30px;
+        margin-bottom: 32px;
     }
 
     .page-title {
-        font-size: 2rem;
+        font-size: 2.2rem;
         font-weight: 800;
-        color: #0f172a;
+        color: var(--text-main);
         margin: 0 0 8px 0;
         letter-spacing: -0.03em;
     }
 
     .page-subtitle {
         font-size: 1.05rem;
-        color: #64748b;
+        color: var(--text-muted);
         margin: 0;
+    }
+
+    .badge-row {
+        margin-top: 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+
+    .account-badge {
+        padding: 6px 14px;
+        border-radius: 8px;
+        font-size: 0.85rem;
+        font-weight: 700;
+        display: inline-flex;
+        align-items: center;
+    }
+
+    .business-badge {
+        background: #1e293b;
+        color: var(--accent);
+        border: 1px solid var(--accent);
+        box-shadow: var(--shadow-sm);
+    }
+
+    .ind-badge {
+        background: #ffffff;
+        color: var(--text-muted);
+        border: 1px solid #cbd5e1;
+        box-shadow: var(--shadow-sm);
     }
 
     .draft-badge {
         background: #f0fdf4;
         color: #166534;
         border: 1px solid #bbf7d0;
-        padding: 6px 12px;
+        padding: 6px 14px;
         border-radius: 8px;
         font-size: 0.85rem;
-        font-weight: 600;
-        animation: fadeIn 0.3s ease-in;
+        font-weight: 700;
+        animation: fadeIn 0.4s ease-out;
+        box-shadow: var(--shadow-sm);
     }
 
     .btn-ghost-header {
-        background: none;
-        border: none;
-        color: #64748b;
-        font-weight: 600;
+        background: transparent;
+        border: 2px solid transparent;
+        color: var(--text-muted);
+        font-weight: 700;
         cursor: pointer;
-        padding: 8px 16px;
-        border-radius: 8px;
-        transition: 0.2s;
+        padding: 10px 20px;
+        border-radius: 10px;
+        transition: var(--transition);
+        font-size: 0.95rem;
     }
 
         .btn-ghost-header:hover {
-            background: #f1f5f9;
-            color: #0f172a;
+            background: #e2e8f0;
+            color: var(--text-main);
         }
 
+    /* Alerts */
     .alert {
-        padding: 16px;
+        padding: 16px 20px;
         border-radius: 12px;
         margin-bottom: 24px;
         display: flex;
         align-items: center;
         gap: 12px;
-        font-weight: 500;
+        font-weight: 600;
+        box-shadow: var(--shadow-sm);
     }
 
     .alert-error {
@@ -248,31 +304,37 @@
         color: #92400e;
     }
 
+    .alert-icon {
+        font-size: 1.2rem;
+    }
+
+    /* Main Form Card */
     .sell-card {
-        background: white;
-        border-radius: 20px;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+        background: var(--card-bg);
+        border-radius: var(--radius);
+        box-shadow: var(--shadow-lg);
         overflow: hidden;
+        border: 1px solid var(--border-color);
     }
 
     .form-layout {
         display: grid;
         grid-template-columns: 2fr 1fr;
-        border-bottom: 1px solid #f1f5f9;
+        border-bottom: 1px solid var(--border-color);
     }
 
     .form-main {
-        padding: 40px;
-        border-right: 1px solid #f1f5f9;
+        padding: 48px;
+        border-right: 1px solid var(--border-color);
     }
 
     .form-sidebar {
-        padding: 40px;
+        padding: 48px;
         background: #fafaf9;
     }
 
     .form-section {
-        margin-bottom: 40px;
+        margin-bottom: 48px;
     }
 
         .form-section:last-child {
@@ -280,59 +342,69 @@
         }
 
     .section-title {
-        font-size: 1.1rem;
-        font-weight: 700;
-        color: #0f172a;
-        margin: 0 0 20px 0;
-        border-bottom: 2px solid #f1f5f9;
-        padding-bottom: 10px;
+        font-size: 1.2rem;
+        font-weight: 800;
+        color: var(--text-main);
+        margin: 0 0 24px 0;
+        border-bottom: 2px solid var(--border-color);
+        padding-bottom: 12px;
     }
 
+    /* Inputs */
     .field {
         margin-bottom: 24px;
     }
 
     .label {
         display: block;
-        font-weight: 600;
-        color: #334155;
-        margin-bottom: 8px;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 10px;
         font-size: 0.95rem;
     }
 
     .req {
-        color: #ef4444;
+        color: var(--danger);
     }
 
     .field-hint {
         display: block;
-        color: #64748b;
+        color: var(--text-muted);
         font-size: 0.85rem;
-        margin-top: 6px;
+        margin-top: 8px;
+        font-weight: 500;
     }
 
-    .modern-input {
+    .input-sleek {
         width: 100%;
-        padding: 12px 16px;
-        border: 1px solid #cbd5e1;
-        border-radius: 10px;
+        padding: 14px 18px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
         font-size: 1rem;
-        color: #0f172a;
-        transition: all 0.2s ease;
-        background: white;
-        font-family: inherit;
+        background: #f8fafc;
+        color: var(--text-main);
+        transition: var(--transition);
         box-sizing: border-box;
+        font-weight: 500;
+        font-family: inherit;
     }
 
-        .modern-input:focus {
+        .input-sleek:focus {
             outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+            border-color: var(--accent);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(255, 102, 0, 0.1);
         }
 
-        .modern-input::placeholder {
+        .input-sleek::placeholder {
             color: #94a3b8;
         }
+
+    .textarea-tall {
+        min-height: 160px;
+        resize: vertical;
+        line-height: 1.6;
+    }
 
     .input-with-prefix {
         position: relative;
@@ -342,35 +414,37 @@
 
     .prefix {
         position: absolute;
-        left: 16px;
-        color: #64748b;
-        font-weight: 600;
+        left: 18px;
+        color: var(--text-muted);
+        font-weight: 700;
         font-size: 1.1rem;
     }
 
     .with-prefix {
-        padding-left: 40px;
+        padding-left: 44px;
     }
 
+    /* Upload Dropzone */
     .upload-dropzone {
         border: 2px dashed #cbd5e1;
         border-radius: 16px;
-        padding: 4px;
+        padding: 6px;
         text-align: center;
         background: #f8fafc;
-        transition: all 0.2s ease;
+        transition: var(--transition);
         position: relative;
+        cursor: pointer;
     }
 
         .upload-dropzone:hover {
-            border-color: #94a3b8;
-            background: #f1f5f9;
+            border-color: var(--accent);
+            background: #fff7ed;
         }
 
         .upload-dropzone.has-file {
-            border-style: solid;
-            border-color: #e2e8f0;
+            border: 2px solid var(--border-color);
             background: white;
+            cursor: default;
         }
 
     .file-input-hidden {
@@ -381,113 +455,128 @@
         display: flex;
         flex-direction: column;
         align-items: center;
-        padding: 40px 20px;
+        padding: 48px 24px;
         cursor: pointer;
     }
 
     .upload-icon {
-        font-size: 2.5rem;
-        margin-bottom: 12px;
+        font-size: 3rem;
+        margin-bottom: 16px;
+        opacity: 0.8;
+        transition: var(--transition);
+    }
+
+    .upload-dropzone:hover .upload-icon {
+        transform: translateY(-4px);
+        opacity: 1;
     }
 
     .upload-text {
-        font-weight: 600;
-        color: #334155;
-        font-size: 1.1rem;
-        margin-bottom: 4px;
+        font-weight: 800;
+        color: var(--text-main);
+        font-size: 1.15rem;
+        margin-bottom: 6px;
     }
 
     .upload-hint {
-        color: #94a3b8;
+        color: var(--text-muted);
         font-size: 0.9rem;
+        font-weight: 500;
     }
 
     .preview-container {
         position: relative;
         border-radius: 12px;
         overflow: hidden;
-        background: #f8fafc;
+        background: #f1f5f9;
         display: flex;
         justify-content: center;
         align-items: center;
-        min-height: 250px;
+        min-height: 280px;
     }
 
     .image-preview {
         width: 100%;
-        max-height: 380px;
+        max-height: 400px;
         object-fit: contain;
         border-radius: 12px;
     }
 
     .change-img-btn {
         position: absolute;
-        bottom: 16px;
-        background: rgba(15, 23, 42, 0.85);
+        bottom: 20px;
+        background: rgba(15, 23, 42, 0.9);
         color: white;
-        padding: 10px 18px;
-        border-radius: 8px;
-        font-weight: 600;
-        font-size: 0.9rem;
+        padding: 12px 24px;
+        border-radius: 10px;
+        font-weight: 700;
+        font-size: 0.95rem;
         cursor: pointer;
-        backdrop-filter: blur(4px);
-        transition: 0.2s;
-        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        backdrop-filter: blur(8px);
+        transition: var(--transition);
+        box-shadow: var(--shadow-md);
+        border: 1px solid rgba(255,255,255,0.1);
     }
 
         .change-img-btn:hover {
-            background: rgba(15, 23, 42, 1);
-            transform: scale(1.03);
+            background: var(--primary);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
         }
 
     .val-message {
-        color: #ef4444;
+        color: var(--danger);
         font-size: 0.85rem;
         display: block;
-        margin-top: 6px;
-        font-weight: 500;
+        margin-top: 8px;
+        font-weight: 600;
     }
 
+    /* Footer */
     .form-footer {
-        padding: 24px 40px;
+        padding: 24px 48px;
         background: #f8fafc;
         display: flex;
         justify-content: flex-end;
+        border-top: 1px solid var(--border-color);
     }
 
     .btn-publish {
-        background: #0f172a;
+        background: var(--primary);
         color: white;
         border: none;
-        padding: 14px 32px;
-        border-radius: 10px;
+        padding: 16px 36px;
+        border-radius: 12px;
         font-size: 1.1rem;
-        font-weight: 700;
+        font-weight: 800;
         cursor: pointer;
-        transition: all 0.2s ease;
+        transition: var(--transition);
         display: flex;
         align-items: center;
-        gap: 10px;
+        gap: 12px;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.2);
     }
 
         .btn-publish:hover:not(:disabled) {
-            background: #2563eb;
+            background: var(--accent);
             transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(37, 99, 235, 0.2);
+            box-shadow: 0 8px 20px rgba(255, 102, 0, 0.3);
         }
 
         .btn-publish:disabled {
             background: #94a3b8;
             cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
         }
 
     .spinner {
-        width: 18px;
-        height: 18px;
+        width: 20px;
+        height: 20px;
         border: 3px solid rgba(255,255,255,0.3);
         border-top-color: white;
         border-radius: 50%;
-        animation: spin 1s linear infinite;
+        animation: spin 1s cubic-bezier(0.4, 0, 0.2, 1) infinite;
     }
 
     @@keyframes spin {
@@ -499,7 +588,7 @@
     @@keyframes fadeIn {
         from {
             opacity: 0;
-            transform: translateY(-4px);
+            transform: translateY(-10px);
         }
 
         to {
@@ -508,26 +597,29 @@
         }
     }
 
+    /* Responsive */
     @@media (max-width: 900px) {
         .form-layout {
             grid-template-columns: 1fr;
         }
 
         .form-sidebar {
-            border-top: 1px solid #f1f5f9;
+            border-top: 1px solid var(--border-color);
         }
 
         .form-main, .form-sidebar {
-            padding: 24px;
+            padding: 32px 24px;
         }
 
         .form-footer {
-            padding: 20px 24px;
+            padding: 24px;
+            justify-content: stretch;
         }
 
         .btn-publish {
             width: 100%;
             justify-content: center;
+            padding: 18px;
         }
     }
 </style>

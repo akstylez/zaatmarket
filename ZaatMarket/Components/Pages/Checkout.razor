@@ -1,5 +1,6 @@
 ﻿@page "/checkout"
 @rendermode InteractiveServer
+@implements IDisposable
 
 @using ZaatMarket.Services
 @using ZaatMarket.Models
@@ -18,153 +19,187 @@
 @inject AuthenticationStateProvider AuthStateProvider
 @inject UserManager<ApplicationUser> UserManager
 
-<PageTitle>Checkout | ZaatMarket</PageTitle>
+<PageTitle>Secure Checkout | ZAATT</PageTitle>
 
 <div class="checkout-page">
     <div class="checkout-wrap">
         <h1 class="page-title">Secure Checkout</h1>
+        <p class="page-subtitle">Complete your payment and finalize your order securely.</p>
 
         @if (!string.IsNullOrWhiteSpace(StatusMessage))
         {
             <div class="status-banner @(StatusIsError ? "error" : "success")">
-                @StatusMessage
+                <span class="banner-icon">@(StatusIsError ? "⚠️" : "✅")</span> @StatusMessage
             </div>
         }
 
-        <div class="checkout-grid">
-            <section class="checkout-card summary-card">
-                <h2>Order Summary</h2>
+        @if (isLoading)
+        {
+            <div class="loading-state">
+                <div class="spinner"></div>
+                <p>Loading checkout session...</p>
+            </div>
+        }
+        else
+        {
+            <div class="checkout-grid">
+                <!-- Order Summary Section -->
+                <section class="checkout-card summary-card">
+                    <h2>Order Summary</h2>
 
-                @if (Items.Count == 0)
-                {
-                    <div class="empty-state">
-                        <p>Your cart is empty.</p>
-                        <button class="secondary-btn" @onclick="GoToProducts">Go to Products</button>
-                    </div>
-                }
-                else
-                {
-                    @foreach (var item in Items)
+                    @if (Items.Count == 0)
                     {
-                        <div class="summary-row">
-                            <div class="item-main">
-                                <div class="item-name">@item.Name</div>
-                                <div class="item-meta">Qty: @item.Quantity</div>
-                            </div>
-                            <div class="item-total">
-                                @FormatMoney(item.Price * item.Quantity)
-                            </div>
-                        </div>
-                    }
-
-                    <div class="summary-total">
-                        <span>Total</span>
-                        <strong>@FormatMoney(Total)</strong>
-                    </div>
-
-                    <div class="summary-actions">
-                        <button class="danger-btn" @onclick="ClearCart">Clear Cart</button>
-                        <button class="secondary-btn" @onclick="GoToCart">Edit Cart</button>
-                    </div>
-                }
-            </section>
-
-            <section class="checkout-card payment-card">
-                <h2>Checkout Details</h2>
-
-                <EditForm Model="PaymentInput" OnValidSubmit="ProcessRealPaymentAsync">
-                    <DataAnnotationsValidator />
-                    <ValidationSummary class="validation-summary" />
-
-                    <!-- Contact Details -->
-                    <h3 class="section-subtitle">Contact Information</h3>
-                    <div class="field">
-                        <label for="fullName">Full Name</label>
-                        <InputText id="fullName" @bind-Value="PaymentInput.FullName" class="input" disabled="@IsProcessingPayment" />
-                        <ValidationMessage For="@(() => PaymentInput.FullName)" />
-                    </div>
-
-                    <div class="field">
-                        <label for="email">Email Address</label>
-                        <InputText id="email" @bind-Value="PaymentInput.Email" class="input" disabled="@IsProcessingPayment" />
-                        <ValidationMessage For="@(() => PaymentInput.Email)" />
-                    </div>
-
-                    <!-- Logistics & Delivery (Hidden if Digital Subscription) -->
-                    @if (!IsSubscriptionOrder)
-                    {
-                        <h3 class="section-subtitle">Logistics & Delivery</h3>
-                        <div class="field-row">
-                            <div class="field">
-                                <label for="deliveryFrom">Dispatch Origin (From)</label>
-                                <InputText id="deliveryFrom" @bind-Value="PaymentInput.DeliveryFrom" class="input" placeholder="e.g. Harare" disabled="@IsProcessingPayment" />
-                                <ValidationMessage For="@(() => PaymentInput.DeliveryFrom)" />
-                            </div>
-                            <div class="field">
-                                <label for="deliveryTo">Final Destination (To)</label>
-                                <InputText id="deliveryTo" @bind-Value="PaymentInput.DeliveryTo" class="input" placeholder="e.g. Bulawayo" disabled="@IsProcessingPayment" />
-                                <ValidationMessage For="@(() => PaymentInput.DeliveryTo)" />
-                            </div>
-                        </div>
-                    }
-
-                    <!-- Payment Method -->
-                    <h3 class="section-subtitle">Payment Method</h3>
-                    <div class="payment-tabs">
-                        <button class="tab-btn @(SelectedMethod == "EcoCash" ? "active" : "")"
-                                @onclick="@(() => SelectMethod("EcoCash"))" type="button" disabled="@IsProcessingPayment">
-                            📱 EcoCash
-                        </button>
-                        <button class="tab-btn @(SelectedMethod == "Card" ? "active" : "")"
-                                @onclick="@(() => SelectMethod("Card"))" type="button" disabled="@IsProcessingPayment">
-                            💳 Visa / Mastercard
-                        </button>
-                    </div>
-
-                    @if (SelectedMethod == "EcoCash")
-                    {
-                        <div class="field slide-in">
-                            <label for="phone">EcoCash Number</label>
-                            <InputText id="phone" @bind-Value="PaymentInput.PhoneNumber" class="input" placeholder="e.g. 0771234567" disabled="@IsProcessingPayment" />
-                            <ValidationMessage For="@(() => PaymentInput.PhoneNumber)" />
+                        <div class="empty-state">
+                            <div class="empty-icon">🛒</div>
+                            <p>Your cart is empty.</p>
+                            <button class="btn-secondary mt-3" @onclick="GoToProducts">Go to Products</button>
                         </div>
                     }
                     else
                     {
-                        <div class="secure-notice slide-in">
-                            <div class="secure-icon">🔒</div>
-                            <div>
-                                <strong>Secure Redirect</strong>
-                                <p>You will be securely redirected to Paynow to enter your card details.</p>
-                            </div>
+                        <div class="summary-items-list">
+                            @foreach (var item in Items)
+                            {
+                                <div class="summary-row">
+                                    <div class="item-main">
+                                        <div class="item-name">@item.Name</div>
+                                        <div class="item-meta">Qty: @item.Quantity</div>
+                                    </div>
+                                    <div class="item-total">
+                                        @FormatMoney(item.Price * item.Quantity)
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        <div class="summary-total-box">
+                            <span>Total Amount</span>
+                            <strong>@FormatMoney(Total)</strong>
+                        </div>
+
+                        <div class="summary-actions">
+                            <button class="btn-danger-outline" @onclick="ClearCart">Clear Cart</button>
+                            <button class="btn-secondary" @onclick="GoToCart">Edit Cart</button>
                         </div>
                     }
+                </section>
 
-                    <button type="submit" class="primary-btn" disabled="@(IsProcessingPayment || Items.Count == 0)">
-                        @if (IsProcessingPayment)
+                <!-- Payment Details Section -->
+                <section class="checkout-card payment-card">
+                    <h2>Checkout Details</h2>
+
+                    <EditForm Model="PaymentInput" OnValidSubmit="ProcessRealPaymentAsync">
+                        <DataAnnotationsValidator />
+                        <ValidationSummary class="validation-summary" />
+
+                        <!-- Contact Details -->
+                        <h3 class="section-subtitle">Contact Information</h3>
+                        <div class="field">
+                            <label for="fullName">Full Name</label>
+                            <InputText id="fullName" @bind-Value="PaymentInput.FullName" class="input-sleek" disabled="@IsProcessingPayment" placeholder="e.g. John Doe" />
+                            <ValidationMessage For="@(() => PaymentInput.FullName)" class="val-msg" />
+                        </div>
+
+                        <div class="field">
+                            <label for="email">Email Address</label>
+                            <InputText id="email" @bind-Value="PaymentInput.Email" class="input-sleek" disabled="@IsProcessingPayment" placeholder="e.g. john@example.com" />
+                            <ValidationMessage For="@(() => PaymentInput.Email)" class="val-msg" />
+                        </div>
+
+                        <!-- Logistics & Delivery (Hidden if Digital Subscription) -->
+                        @if (!IsSubscriptionOrder)
                         {
-                            <span>Processing...</span>
+                            <h3 class="section-subtitle">Logistics & Delivery</h3>
+                            <div class="field-row">
+                                <div class="field">
+                                    <label for="deliveryFrom">Dispatch Origin (From)</label>
+                                    <InputText id="deliveryFrom" @bind-Value="PaymentInput.DeliveryFrom" class="input-sleek" placeholder="e.g. Harare" disabled="@IsProcessingPayment" />
+                                    <ValidationMessage For="@(() => PaymentInput.DeliveryFrom)" class="val-msg" />
+                                </div>
+                                <div class="field">
+                                    <label for="deliveryTo">Final Destination (To)</label>
+                                    <InputText id="deliveryTo" @bind-Value="PaymentInput.DeliveryTo" class="input-sleek" placeholder="e.g. Bulawayo" disabled="@IsProcessingPayment" />
+                                    <ValidationMessage For="@(() => PaymentInput.DeliveryTo)" class="val-msg" />
+                                </div>
+                            </div>
                         }
-                        else if (SelectedMethod == "EcoCash")
+
+                        <!-- Payment Method -->
+                        <h3 class="section-subtitle">Payment Method</h3>
+                        <div class="payment-tabs">
+                            <button class="tab-btn @(SelectedMethod == "EcoCash" ? "active" : "")"
+                                    @onclick="@(() => SelectMethod("EcoCash"))" type="button" disabled="@IsProcessingPayment">
+                                📱 EcoCash
+                            </button>
+                            <button class="tab-btn @(SelectedMethod == "Card" ? "active" : "")"
+                                    @onclick="@(() => SelectMethod("Card"))" type="button" disabled="@IsProcessingPayment">
+                                💳 Visa / Mastercard
+                            </button>
+                        </div>
+
+                        @if (SelectedMethod == "EcoCash")
                         {
-                            <span>Pay @FormatMoney(Total) via EcoCash</span>
+                            <div class="field slide-in">
+                                <label for="phone">EcoCash Number</label>
+                                <InputText id="phone" @bind-Value="PaymentInput.PhoneNumber" class="input-sleek" placeholder="e.g. 0771234567" disabled="@IsProcessingPayment" />
+                                <ValidationMessage For="@(() => PaymentInput.PhoneNumber)" class="val-msg" />
+                            </div>
                         }
                         else
                         {
-                            <span>Proceed to Secure Card Payment ➔</span>
+                            <div class="secure-notice slide-in">
+                                <div class="secure-icon">🔒</div>
+                                <div>
+                                    <strong>Secure Redirect</strong>
+                                    <p>You will be securely redirected to Paynow to enter your card details.</p>
+                                </div>
+                            </div>
                         }
-                    </button>
-                </EditForm>
-            </section>
-        </div>
+
+                        <button type="submit" class="btn-primary full mt-4" disabled="@(IsProcessingPayment || Items.Count == 0)">
+                            @if (IsProcessingPayment)
+                            {
+                                <span class="spinner-small"></span> <span>Processing Payment...</span>
+                            }
+                            else if (SelectedMethod == "EcoCash")
+                            {
+                                <span>Pay @FormatMoney(Total) via EcoCash</span>
+                            }
+                            else
+                            {
+                                <span>Proceed to Secure Card Payment ➔</span>
+                            }
+                        </button>
+                    </EditForm>
+                </section>
+            </div>
+        }
     </div>
 </div>
 
 <style>
+    :root {
+        --bg-color: #f4f5f8;
+        --card-bg: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --primary: #0f172a;
+        --accent: #ff6600;
+        --accent-hover: #e65c00;
+        --danger: #ef4444;
+        --radius: 16px;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.06);
+        --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
     .checkout-page {
         min-height: calc(100vh - 80px);
-        background: #f4f5f8;
-        padding: 40px 20px 60px;
+        background: var(--bg-color);
+        padding: 40px 24px 60px;
+        font-family: system-ui, -apple-system, sans-serif;
     }
 
     .checkout-wrap {
@@ -173,17 +208,28 @@
     }
 
     .page-title {
-        font-size: 3rem;
-        margin: 0 0 20px;
-        color: #0f172a;
+        font-size: 2.5rem;
+        margin: 0 0 6px;
+        color: var(--text-main);
         font-weight: 800;
+        letter-spacing: -0.02em;
+    }
+
+    .page-subtitle {
+        color: var(--text-muted);
+        font-size: 1.1rem;
+        margin: 0 0 32px 0;
     }
 
     .status-banner {
-        margin-bottom: 18px;
-        padding: 14px 16px;
-        border-radius: 16px;
-        font-weight: 600;
+        margin-bottom: 24px;
+        padding: 16px 20px;
+        border-radius: 12px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: var(--shadow-sm);
     }
 
         .status-banner.error {
@@ -198,32 +244,68 @@
             border: 1px solid #86efac;
         }
 
+    .loading-state {
+        text-align: center;
+        padding: 60px;
+        color: var(--text-muted);
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #e5e7eb;
+        border-top-color: var(--text-main);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    .spinner-small {
+        width: 18px;
+        height: 18px;
+        border: 3px solid rgba(255,255,255,0.3);
+        border-top-color: white;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        display: inline-block;
+        vertical-align: middle;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
     .checkout-grid {
         display: grid;
-        grid-template-columns: 1.2fr 0.9fr;
-        gap: 24px;
+        grid-template-columns: 1.2fr 1fr;
+        gap: 32px;
         align-items: start;
     }
 
     .checkout-card {
-        background: #ffffff;
-        border-radius: 26px;
-        padding: 26px;
-        box-shadow: 0 16px 40px rgba(15, 23, 42, 0.08);
+        background: var(--card-bg);
+        border-radius: var(--radius);
+        padding: 32px;
+        box-shadow: var(--shadow-md);
+        border: 1px solid var(--border-color);
     }
 
         .checkout-card h2 {
-            margin: 0 0 14px;
-            font-size: 1.8rem;
-            color: #111827;
+            margin: 0 0 20px;
+            font-size: 1.4rem;
+            color: var(--text-main);
+            font-weight: 800;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 16px;
         }
 
     .section-subtitle {
-        margin: 24px 0 16px;
-        font-size: 1.15rem;
-        color: #1f2937;
-        border-bottom: 1px solid #f1f5f9;
-        padding-bottom: 8px;
+        margin: 28px 0 16px;
+        font-size: 1.05rem;
+        color: var(--text-main);
+        font-weight: 700;
     }
 
     .field-row {
@@ -241,7 +323,8 @@
         margin-bottom: 24px;
         background: #f1f5f9;
         padding: 6px;
-        border-radius: 16px;
+        border-radius: 12px;
+        border: 1px solid var(--border-color);
     }
 
     .tab-btn {
@@ -249,27 +332,27 @@
         padding: 12px;
         border: none;
         background: transparent;
-        border-radius: 12px;
+        border-radius: 8px;
         font-weight: 700;
-        color: #64748b;
+        color: var(--text-muted);
         cursor: pointer;
-        transition: 0.2s;
+        transition: var(--transition);
     }
 
         .tab-btn.active {
             background: white;
-            color: #0f172a;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            color: var(--text-main);
+            box-shadow: var(--shadow-sm);
         }
 
     .secure-notice {
         display: flex;
-        gap: 15px;
+        gap: 16px;
         align-items: center;
         background: #f0fdf4;
         border: 1px solid #bbf7d0;
         padding: 16px;
-        border-radius: 14px;
+        border-radius: 12px;
         margin-bottom: 20px;
         color: #166534;
     }
@@ -282,10 +365,11 @@
         margin: 4px 0 0;
         font-size: 0.9rem;
         color: #15803d;
+        font-weight: 500;
     }
 
     .slide-in {
-        animation: slideDown 0.3s ease-out forwards;
+        animation: slideDown 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
 
     @@keyframes slideDown {
@@ -300,111 +384,198 @@
         }
     }
 
+    .summary-items-list {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        max-height: 350px;
+        overflow-y: auto;
+        padding-right: 4px;
+    }
+
     .summary-row {
         display: grid;
         grid-template-columns: 1fr auto;
         gap: 16px;
         align-items: center;
-        padding: 16px 0;
-        border-bottom: 1px solid #e5e7eb;
+        padding-bottom: 16px;
+        border-bottom: 1px solid var(--border-color);
     }
 
     .item-name {
         font-weight: 700;
-        color: #111827;
+        color: var(--text-main);
+        font-size: 1.05rem;
     }
 
     .item-meta {
-        color: #6b7280;
-        font-size: 0.95rem;
+        color: var(--text-muted);
+        font-size: 0.9rem;
         margin-top: 4px;
+        font-weight: 500;
     }
 
     .item-total {
         font-weight: 800;
-        color: #111827;
+        color: var(--text-main);
         text-align: right;
+        font-size: 1.05rem;
     }
 
-    .summary-total {
+    .summary-total-box {
         display: flex;
         justify-content: space-between;
         align-items: center;
-        padding-top: 18px;
-        font-size: 1.8rem;
+        padding-top: 24px;
+        margin-top: 24px;
+        border-top: 2px dashed var(--border-color);
+        font-size: 1.3rem;
         font-weight: 800;
-        color: #111827;
+        color: var(--text-main);
     }
 
+        .summary-total-box strong {
+            color: #10b981;
+        }
+
+    .summary-actions {
+        display: flex;
+        gap: 12px;
+        margin-top: 24px;
+    }
+
+        .summary-actions button {
+            flex: 1;
+        }
+
     .field {
-        margin-bottom: 16px;
+        margin-bottom: 20px;
     }
 
         .field label {
             display: block;
             margin-bottom: 8px;
             font-weight: 700;
-            color: #1f2937;
+            color: var(--text-main);
             font-size: 0.95rem;
         }
 
-    .input {
+    .input-sleek {
         width: 100%;
-        border: 1px solid #d1d5db;
-        border-radius: 14px;
-        min-height: 50px;
-        padding: 12px 14px;
+        padding: 14px 18px;
+        border: 2px solid #e2e8f0;
+        border-radius: 12px;
         font-size: 1rem;
+        background: #f8fafc;
+        color: var(--text-main);
+        transition: var(--transition);
+        box-sizing: border-box;
+        font-weight: 500;
+        font-family: inherit;
     }
 
-        .input:focus {
+        .input-sleek:focus {
             outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+            border-color: var(--accent);
+            background: #ffffff;
+            box-shadow: 0 0 0 4px rgba(255, 102, 0, 0.1);
+        }
+
+        .input-sleek::placeholder {
+            color: #94a3b8;
         }
 
     .validation-summary {
-        color: #b91c1c;
+        color: var(--danger);
         margin-bottom: 16px;
+        font-size: 0.9rem;
+        font-weight: 600;
     }
 
-    .primary-btn, .secondary-btn, .danger-btn {
+    .val-msg {
+        color: var(--danger);
+        font-size: 0.85rem;
+        margin-top: 6px;
+        font-weight: 600;
+        display: block;
+    }
+
+    .btn-primary, .btn-secondary, .btn-danger-outline {
         border: none;
-        border-radius: 14px;
-        padding: 16px;
-        font-weight: 800;
-        font-size: 1.1rem;
+        border-radius: 12px;
+        padding: 14px 20px;
         cursor: pointer;
-        transition: 0.15s;
+        font-weight: 700;
+        font-size: 1rem;
+        transition: var(--transition);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
     }
 
-    .primary-btn {
-        background: #2563eb;
+    .btn-primary {
+        background: var(--accent);
         color: white;
-        width: 100%;
-        margin-top: 10px;
+        box-shadow: 0 4px 12px rgba(255, 102, 0, 0.2);
     }
 
-        .primary-btn:hover:not(:disabled) {
-            background: #1d4ed8;
+        .btn-primary:hover:not(:disabled) {
+            background: var(--accent-hover);
             transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(255, 102, 0, 0.3);
         }
 
-        .primary-btn:disabled {
-            background: #93c5fd;
+        .btn-primary:disabled {
+            background: #fdba74;
             cursor: not-allowed;
+            box-shadow: none;
+            transform: none;
         }
 
-    .secondary-btn {
-        background: #e5e7eb;
-        color: #111827;
-        padding: 12px 18px;
+    .btn-secondary {
+        background: #f3f4f6;
+        color: var(--text-muted);
+        border: 2px solid var(--border-color);
     }
 
-    .danger-btn {
-        background: #ef4444;
-        color: white;
-        padding: 12px 18px;
+        .btn-secondary:hover {
+            background: #e2e8f0;
+            color: var(--text-main);
+        }
+
+    .btn-danger-outline {
+        background: #fef2f2;
+        color: var(--danger);
+        border: 1px solid #fecaca;
+    }
+
+        .btn-danger-outline:hover {
+            background: #fee2e2;
+        }
+
+    .full {
+        width: 100%;
+    }
+
+    .mt-3 {
+        margin-top: 16px;
+    }
+
+    .mt-4 {
+        margin-top: 24px;
+    }
+
+    .empty-state {
+        text-align: center;
+        padding: 40px 0;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 3rem;
+        margin-bottom: 12px;
+        opacity: 0.6;
     }
 
     @@media (max-width: 900px) {
@@ -422,6 +593,7 @@
 </style>
 
 @code {
+    private bool isLoading = true;
     private string? StatusMessage;
     private bool StatusIsError;
     private bool IsProcessingPayment;
@@ -437,14 +609,32 @@
 
     protected override void OnInitialized()
     {
-        LoadCartItems();
+        Cart.OnChange += HandleCartChanged;
+    }
 
-        // If it's a digital subscription, auto-fill the delivery fields to bypass validation
-        if (IsSubscriptionOrder)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
         {
-            PaymentInput.DeliveryFrom = "Digital Upgrade";
-            PaymentInput.DeliveryTo = "Account System";
+            await Cart.LoadCartAsync();
+            LoadCartItems();
+            isLoading = false;
+
+            // If it's a digital subscription, auto-fill the delivery fields to bypass validation
+            if (IsSubscriptionOrder)
+            {
+                PaymentInput.DeliveryFrom = "Digital Upgrade";
+                PaymentInput.DeliveryTo = "Account System";
+            }
+
+            StateHasChanged();
         }
+    }
+
+    private void HandleCartChanged()
+    {
+        LoadCartItems();
+        InvokeAsync(StateHasChanged);
     }
 
     private void SelectMethod(string method)
@@ -556,7 +746,7 @@
                 StatusMessage = "Connecting to Secure Gateway...";
 
                 var result = await Paynow.StartWebPaymentAsync(
-                                    reference, PaymentInput.Email, Total, itemNameSummary);
+                            reference, PaymentInput.Email, Total, itemNameSummary);
 
                 if (result.Success && !string.IsNullOrEmpty(result.RedirectLink))
                 {
@@ -619,6 +809,11 @@
     private void GoToCart() => Nav.NavigateTo("/cart");
     private void GoToProducts() => Nav.NavigateTo("/products");
     private static string FormatMoney(decimal amount) => amount.ToString("C2", CultureInfo.CreateSpecificCulture("en-US"));
+
+    public void Dispose()
+    {
+        Cart.OnChange -= HandleCartChanged;
+    }
 
     private sealed class PaymentInputModel
     {

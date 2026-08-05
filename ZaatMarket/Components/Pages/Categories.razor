@@ -3,32 +3,214 @@
 @using Microsoft.EntityFrameworkCore
 @inject ZaatMarket.Data.ApplicationDbContext Db
 
-<h1>Categories</h1>
+<PageTitle>Categories | ZAATT</PageTitle>
 
-<div class="page-container">
-    <div class="section-title">Categories</div>
+<div class="categories-page">
+    <div class="categories-header">
+        <h1>Marketplace Categories</h1>
+        <p>Browse products grouped by category to find what you need.</p>
+    </div>
 
     @if (cats is null)
     {
-        <p>Loading...</p>
+        <div class="loading-state">
+            <div class="spinner"></div>
+            <p>Loading categories...</p>
+        </div>
     }
     else if (cats.Count == 0)
     {
-        <p class="muted">No categories yet.</p>
+        <div class="empty-state">
+            <div class="empty-icon">📂</div>
+            <h3>No categories yet</h3>
+            <p>Categories will appear here once products are listed.</p>
+        </div>
     }
     else
     {
-        <div class="grid">
+        <div class="categories-grid">
             @foreach (var c in cats)
             {
-                <a class="card" href="@($"/products/category/{Uri.EscapeDataString(c.Name)}")">
-                    <div class="card-title">@c.Name</div>
-                    <div class="muted">@c.Count product(s)</div>
+                <a class="category-card" href="@($"/products/category/{Uri.EscapeDataString(c.Name)}")">
+                    <div class="card-icon">🏷️</div>
+                    <div class="card-content">
+                        <div class="card-title">@c.Name</div>
+                        <div class="card-subtitle">@c.Count product@(c.Count == 1 ? "" : "s") available</div>
+                    </div>
+                    <div class="card-arrow">→</div>
                 </a>
             }
         </div>
     }
 </div>
+
+<style>
+    :root {
+        --bg-color: #f4f5f8;
+        --card-bg: #ffffff;
+        --text-main: #0f172a;
+        --text-muted: #64748b;
+        --border-color: #e2e8f0;
+        --primary: #0f172a;
+        --accent: #ff6600;
+        --accent-hover: #e65c00;
+        --radius: 16px;
+        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.05);
+        --shadow-lg: 0 12px 24px rgba(15, 23, 42, 0.06);
+        --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .categories-page {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 40px 24px;
+        min-height: 80vh;
+        font-family: system-ui, -apple-system, sans-serif;
+    }
+
+    .categories-header {
+        margin-bottom: 32px;
+    }
+
+        .categories-header h1 {
+            font-size: 2.2rem;
+            font-weight: 800;
+            color: var(--text-main);
+            margin: 0 0 8px 0;
+            letter-spacing: -0.02em;
+        }
+
+        .categories-header p {
+            color: var(--text-muted);
+            font-size: 1.1rem;
+            margin: 0;
+        }
+
+    /* Loading & Empty States */
+    .loading-state {
+        text-align: center;
+        padding: 60px;
+        color: var(--text-muted);
+    }
+
+    .spinner {
+        width: 40px;
+        height: 40px;
+        border: 4px solid #e5e7eb;
+        border-top-color: var(--text-main);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+        margin: 0 auto 16px;
+    }
+
+    @@keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    .empty-state {
+        background: var(--card-bg);
+        border-radius: var(--radius);
+        padding: 60px 20px;
+        box-shadow: var(--shadow-md);
+        text-align: center;
+        border: 1px solid var(--border-color);
+    }
+
+    .empty-icon {
+        font-size: 4rem;
+        margin-bottom: 16px;
+        opacity: 0.5;
+    }
+
+    .empty-state h3 {
+        font-size: 1.5rem;
+        color: var(--text-main);
+        margin-bottom: 8px;
+        font-weight: 800;
+    }
+
+    .empty-state p {
+        color: var(--text-muted);
+        margin: 0;
+    }
+
+    /* Grid & Cards */
+    .categories-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+        gap: 20px;
+    }
+
+    .category-card {
+        background: var(--card-bg);
+        border-radius: var(--radius);
+        padding: 24px;
+        border: 1px solid var(--border-color);
+        display: flex;
+        align-items: center;
+        gap: 20px;
+        text-decoration: none;
+        box-shadow: var(--shadow-sm);
+        transition: var(--transition);
+    }
+
+        .category-card:hover {
+            border-color: var(--accent);
+            transform: translateY(-3px);
+            box-shadow: var(--shadow-lg);
+        }
+
+    .card-icon {
+        width: 50px;
+        height: 50px;
+        background: #fff7ed;
+        border: 1px solid #ffedd5;
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.4rem;
+        flex-shrink: 0;
+    }
+
+    .card-content {
+        flex: 1;
+    }
+
+    .card-title {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--text-main);
+        margin-bottom: 4px;
+    }
+
+    .card-subtitle {
+        font-size: 0.9rem;
+        color: var(--text-muted);
+        font-weight: 500;
+    }
+
+    .card-arrow {
+        font-size: 1.2rem;
+        color: var(--text-muted);
+        font-weight: 700;
+        transition: var(--transition);
+    }
+
+    .category-card:hover .card-arrow {
+        color: var(--accent);
+        transform: translateX(4px);
+    }
+
+    @@media (max-width: 768px) {
+        .categories-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
 
 @code {
     private List<CategoryInfo>? cats;

@@ -3,7 +3,6 @@
 
 @using System.Security.Claims
 @using System.ComponentModel.DataAnnotations
-@using System.Text.RegularExpressions
 @using Microsoft.AspNetCore.Authorization
 @using Microsoft.AspNetCore.Identity
 @using Microsoft.EntityFrameworkCore
@@ -76,18 +75,18 @@
                         <span class="status-dot"></span>
                         Your Agent Subscription is Active
                     </div>
-                    <button class="btn-dashboard" @onclick='() => Nav.NavigateTo("/agent-dashboard", forceLoad: true)'>Enter Command Center</button>
+                    <button class="btn-dashboard" @onclick="@(() => Nav.NavigateTo("/agent-dashboard", true))">Enter Command Center</button>
                 }
                 else
                 {
                     <div class="plan-tabs">
-                        <button type="button" class="plan-btn @(SelectedPlan == 1 ? "active" : "")" @onclick="() => SelectPlan(1, 5m)">
+                        <button type="button" class="plan-btn @(SelectedPlan == 1 ? "active" : "")" @onclick="@(() => SelectPlan(1, 5m))">
                             1 Month<br /><strong>$5</strong>
                         </button>
-                        <button type="button" class="plan-btn @(SelectedPlan == 6 ? "active" : "")" @onclick="() => SelectPlan(6, 20m)">
+                        <button type="button" class="plan-btn @(SelectedPlan == 6 ? "active" : "")" @onclick="@(() => SelectPlan(6, 20m))">
                             6 Months<br /><strong>$20</strong>
                         </button>
-                        <button type="button" class="plan-btn @(SelectedPlan == 12 ? "active" : "")" @onclick="() => SelectPlan(12, 45m)">
+                        <button type="button" class="plan-btn @(SelectedPlan == 12 ? "active" : "")" @onclick="@(() => SelectPlan(12, 45m))">
                             1 Year<br /><strong>$45</strong>
                         </button>
                     </div>
@@ -99,10 +98,10 @@
                     </div>
 
                     <div class="payment-tabs-dark">
-                        <button class="tab-btn-dark @(SelectedMethod == "EcoCash" ? "active" : "")" @onclick='() => SelectMethod("EcoCash")' type="button">
+                        <button class="tab-btn-dark @(SelectedMethod == "EcoCash" ? "active" : "")" @onclick="@(() => SelectMethod("EcoCash"))" type="button">
                             📱 EcoCash
                         </button>
-                        <button class="tab-btn-dark @(SelectedMethod == "Card" ? "active" : "")" @onclick='() => SelectMethod("Card")' type="button">
+                        <button class="tab-btn-dark @(SelectedMethod == "Card" ? "active" : "")" @onclick="@(() => SelectMethod("Card"))" type="button">
                             💳 Mastercard
                         </button>
                     </div>
@@ -118,8 +117,8 @@
                             </div>
 
                             <div class="form-group" style="margin-top: 16px;">
-                                <label>Email Address</label>
-                                <InputText @bind-Value="PaymentInput.Email" class="input-dark" placeholder="agent@zaatmarket.com" disabled="@IsProcessingPayment" />
+                                <label>Username</label>
+                                <InputText @bind-Value="PaymentInput.Username" class="input-dark" placeholder="e.g. agent_zaat" disabled="@IsProcessingPayment" />
                             </div>
 
                             @if (SelectedMethod == "EcoCash")
@@ -562,8 +561,6 @@
 
     protected override async Task OnInitializedAsync()
     {
-        PaymentInput ??= new PaymentInputModel();
-
         var authState = await AuthStateProvider.GetAuthenticationStateAsync();
         var userPrincipal = authState.User;
 
@@ -579,8 +576,8 @@
                 if (currentUser != null)
                 {
                     isAlreadyPremium = currentUser.IsPremiumAgent;
-                    PaymentInput.FullName = !string.IsNullOrWhiteSpace(currentUser.DisplayName) ? currentUser.DisplayName : (currentUser.Email ?? "");
-                    PaymentInput.Email = currentUser.Email ?? "";
+                    PaymentInput.FullName = !string.IsNullOrWhiteSpace(currentUser.DisplayName) ? currentUser.DisplayName : (currentUser.UserName ?? "");
+                    PaymentInput.Username = currentUser.UserName ?? "";
                 }
             }
         }
@@ -640,7 +637,7 @@
             await Task.Delay(2500);
 
             // === DATABASE UPGRADE ===
-            // Fetch a fresh, tracked instance from UserManager to avoid EF Core context concurrency crashes!
+            // Fetch a fresh, tracked instance from UserManager to avoid EF Core context concurrency crashes
             var userToUpdate = await UserManager.FindByIdAsync(userId);
             if (userToUpdate == null)
             {
@@ -699,9 +696,8 @@
         [Required(ErrorMessage = "Name is required.")]
         public string FullName { get; set; } = string.Empty;
 
-        [Required(ErrorMessage = "Email is required.")]
-        [EmailAddress(ErrorMessage = "Valid email required.")]
-        public string Email { get; set; } = string.Empty;
+        [Required(ErrorMessage = "Username is required.")]
+        public string Username { get; set; } = string.Empty;
 
         [Required(ErrorMessage = "Required for EcoCash.")]
         public string PhoneNumber { get; set; } = string.Empty;
